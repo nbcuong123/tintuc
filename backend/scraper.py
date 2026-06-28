@@ -17,7 +17,7 @@ from firebase_admin import credentials, db
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.firebaseio.com"
+FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 TODAY = datetime.now(VN_TZ).strftime("%Y-%m-%d")
