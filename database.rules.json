@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "articles": {
+      ".read": true,
+      ".write": false
+    },
+    "clusters": {
+      ".read": true,
+      ".write": false
+    },
+    "trends": {
+      ".read": true,
+      ".write": false
+    },
+    "digest": {
+      ".read": true,
+      ".write": false
+    },
+    "meta": {
+      ".read": true,
+      ".write": false
+    },
+    "manual_articles": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}
