@@ -1,12 +1,9 @@
 name: News Digest Daily
 
 on:
-  # Tự động chạy 6h sáng và 12h trưa giờ VN (UTC+7 = 23:00 và 05:00 UTC)
   schedule:
     - cron: "0 23 * * *"   # 6:00 SA giờ VN
     - cron: "0 5  * * *"   # 12:00 TR giờ VN
-
-  # Trigger thủ công từ GitHub UI
   workflow_dispatch:
     inputs:
       reason:
@@ -18,26 +15,22 @@ jobs:
   scrape-and-process:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
-
       - name: Run scraper
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: python backend/scraper.py
-
       - name: Upload log on failure
         if: failure()
         uses: actions/upload-artifact@v4
