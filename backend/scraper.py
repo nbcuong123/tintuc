@@ -13,12 +13,12 @@ from firebase_admin import credentials, db
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# ✅ Danh sách model dự phòng
+# ✅ Danh sách model ĐÚNG trên OpenRouter (cập nhật 2026)
 OPENROUTER_MODELS = [
-    "openai/gpt-4o-mini",                # Chính: ổn định nhất
-    "google/gemini-2.0-flash-001",        # Dự phòng 1
-    "anthropic/claude-3.5-sonnet",        # Dự phòng 2
-    "openrouter/auto",                    # Dự phòng 3
+    "openai/gpt-4o-mini",                    # Chính: ổn định, rẻ
+    "openrouter/auto",                        # Dự phòng 1: auto routing
+    "meta-llama/llama-3.3-70b-instruct:free", # Dự phòng 2: free, mạnh
+    "google/gemma-3-27b-it:free",             # Dự phòng 3: free
 ]
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -140,7 +140,6 @@ JSON format:
 {{
   "articles_vi": [
     {{"index": 1, "title_vi": "...", "summary_vi": "..."}},
-    {{"index": 2, "title_vi": "...", "summary_vi": "..."}},
     ...đúng {n} phần tử...
   ],
   "clusters": [
@@ -152,32 +151,84 @@ JSON format:
   "digest": {{
     "headline": "Tiêu đề tổng kết ngày",
     "overview": "Tổng quan 3-5 câu",
-    "key_points": ["Điểm 1", "Điểm 2", "Điểm 3", "Điểm 4", "Điểm 5"]
+    "key_points": ["Điểm 1", "Điểm 2", "Điểm 3"]
   }}
 }}
 
-Yêu cầu khác:
-- clusters: 5-10 nhóm, importance 1-10
+Yêu cầu:
+- clusters: 5-8 nhóm, importance 1-10
 - trends: top 5, score 1-100, category chỉ: economy/world/vn
+- digest.key_points: chỉ 3 điểm (ngắn gọn)
 - Tên riêng giữ nguyên
 
 DANH SÁCH BÀI:
 {articles_text}
 
-️ QUAN TRỌNG: articles_vi PHẢI có ĐÚNG {n} phần tử với index từ 1 đến {n}. Bắt đầu JSON ngay:"""
+QUAN TRỌNG: articles_vi PHẢI có ĐÚNG {n} phần tử. Bắt đầu JSON ngay:"""
 
 
-def parse_ai_response(text):
+def repair_json(text):
+    """Sửa JSON bị cắt ngang do max_tokens"""
     text = text.strip()
     text = re.sub(r"^```json\s*", "", text)
     text = re.sub(r"^```\s*",     "", text)
     text = re.sub(r"\s*```$",     "", text)
     text = text.strip()
 
-    match = re.search(r"\{[\s\S]*\}", text)
+    # Tìm JSON object lớn nhất
+    match = re.search(r"\{[\s\S]*", text)
     if match:
         text = match.group(0)
 
+    # Đếm và cân bằng ngoặc
+    open_braces = text.count('{')
+    close_braces = text.count('}')
+    open_brackets = text.count('[')
+    close_brackets = text.count(']')
+    
+    # Thêm ngoặc thiếu
+    text = text.rstrip().rstrip(',')
+    while text.count('{') > text.count('}'):
+        # Tìm vị trí cuối không phải ngoặc đóng
+        text = text.rstrip().rstrip(',')
+        text += ']}' if text.rstrip().endswith(']') or text.rstrip().endswith('"') else '}'
+    while text.count('[') > text.count(']'):
+        text = text.rstrip().rstrip(',') + ']}'
+    
+    # Thử parse, nếu fail thì cắt bớt
+    try:
+        return json.loads(text)
+    except:
+        pass
+    
+    # Cắt ở dấu } cuối cùng hợp lệ
+    last_good = 0
+    for i in range(len(text) - 1, -1, -1):
+        if text[i] == '}':
+            try:
+                return json.loads(text[:i+1])
+            except:
+                continue
+    
+    return None
+
+
+def parse_ai_response(text):
+    """Parse JSON với khả năng repair"""
+    result = repair_json(text)
+    if result:
+        return result
+    
+    # Fallback: parse kiểu cũ
+    text = text.strip()
+    text = re.sub(r"^```json\s*", "", text)
+    text = re.sub(r"^```\s*",     "", text)
+    text = re.sub(r"\s*```$",     "", text)
+    
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        text = match.group(0)
+    
     return json.loads(text)
 
 
@@ -204,39 +255,54 @@ def process_with_ai(articles):
                     "model":       model,
                     "messages":    [{"role": "user", "content": prompt}],
                     "temperature": 0.3,
-                    "max_tokens":  12000,
+                    "max_tokens":  16000,  # ✅ TĂNG từ 12000 lên 16000
                 },
                 timeout=240,
             )
             
             if resp.status_code == 429:
-                print(f"  ️  Model {model} bị rate limit (429). Thử model khác...")
+                print(f"  ⚠️  Model {model} bị rate limit (429). Thử model khác...")
                 time.sleep(2)
+                continue
+            
+            if resp.status_code == 404:
+                print(f"  ⚠️  Model {model} không tồn tại (404). Thử model khác...")
                 continue
             
             resp.raise_for_status()
             
             data = resp.json()
-            
             choices = data.get("choices", [])
             if not choices:
-                print(f"  ⚠️  Model {model} trả về không có choices. Thử model khác...")
+                print(f"  ⚠️  Model {model} không có choices. Thử model khác...")
                 continue
                 
             choice = choices[0]
-            if choice.get("finish_reason") == "error":
+            
+            # Kiểm tra finish_reason
+            finish_reason = choice.get("finish_reason")
+            if finish_reason == "error":
                 err = choice.get("error", {})
-                print(f"  ️  Model {model} lỗi: {err.get('message', 'Unknown')}. Thử model khác...")
+                print(f"  ⚠️  Model {model} lỗi: {err.get('message', 'Unknown')}. Thử model khác...")
                 continue
             
             text = choice["message"]["content"]
-            print(f"  → AI raw response length: {len(text)} chars")
+            print(f"  → AI response: {len(text)} chars, finish_reason={finish_reason}")
+            
+            # ✅ Log nếu bị truncate
+            if finish_reason == "length":
+                print(f"  ⚠️  Response bị cắt ngang (max_tokens). Đang repair JSON...")
 
-            result = parse_ai_response(text)
+            try:
+                result = parse_ai_response(text)
+            except json.JSONDecodeError as e:
+                print(f"  ⚠️  Model {model} JSON parse lỗi: {e}")
+                print(f"  Response (đầu): {text[:300]}")
+                continue
 
             arts_vi = result.get("articles_vi", [])
             if len(arts_vi) < subset_count:
-                print(f"  ️  AI trả về thiếu: {len(arts_vi)}/{subset_count} bài. Thử retry...")
+                print(f"  ⚠️  AI trả về thiếu: {len(arts_vi)}/{subset_count} bài. Retry...")
                 result = retry_ai(articles, prompt, result)
 
             clusters = result.get("clusters", [])
@@ -245,12 +311,8 @@ def process_with_ai(articles):
             print(f"  ✅ AI xong ({model}): {len(arts_vi)} bài dịch, {len(clusters)} clusters, {len(trends)} trends")
             return result
 
-        except json.JSONDecodeError as e:
-            print(f"  ⚠️  Model {model} JSON parse lỗi: {e}")
-            print(f"  Response text (đầu): {text[:300] if text else 'N/A'}")
-            continue
         except requests.exceptions.HTTPError as e:
-            print(f"  ️  Model {model} HTTP lỗi: {e}")
+            print(f"  ⚠️  Model {model} HTTP lỗi: {e}")
             continue
         except Exception as e:
             print(f"  ⚠️  Model {model} lỗi: {e}")
@@ -270,14 +332,14 @@ def retry_ai(articles, original_prompt, partial_result):
     for i in missing:
         a = articles[i - 1] if i - 1 < len(articles) else None
         if a:
-            flag = "🇬EN" if a.get("lang") == "en" else "🇻🇳VI"
+            flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
             missing_text += f"\n[{i}] {flag} | {a['source']}\nTitle: {a['title']}\nSummary: {a['summary'][:200]}\n---"
 
-    retry_prompt = f"""Lần trước bạn trả về thiếu {len(missing)} bài. Bổ sung ĐỦ các bài còn thiếu sau:
+    retry_prompt = f"""Lần trước bạn trả về thiếu {len(missing)} bài. Bổ sung ĐỦ các bài còn thiếu:
 
 {missing_text}
 
-Trả về JSON chỉ có articles_vi với đúng {len(missing)} phần tử thiếu:
+Trả về JSON chỉ có articles_vi:
 {{"articles_vi": [{{"index": {missing[0] if missing else 1}, "title_vi": "...", "summary_vi": "..."}}, ...]}}
 
 Bắt đầu JSON ngay:"""
@@ -295,7 +357,7 @@ Bắt đầu JSON ngay:"""
                 "model":       OPENROUTER_MODELS[0],
                 "messages":    [{"role": "user", "content": retry_prompt}],
                 "temperature": 0.2,
-                "max_tokens":  6000,
+                "max_tokens":  8000,
             },
             timeout=180,
         )
@@ -310,7 +372,7 @@ Bắt đầu JSON ngay:"""
                 existing[idx] = item
 
         partial_result["articles_vi"] = [existing[k] for k in sorted(existing.keys())]
-        print(f"  ✅ Retry xong: giờ có {len(partial_result['articles_vi'])} bài")
+        print(f"  ✅ Retry xong: {len(partial_result['articles_vi'])} bài")
         return partial_result
     except Exception as e:
         print(f"  ❌ Retry lỗi: {e}")
@@ -379,18 +441,14 @@ def merge_translations(articles, ai_result):
     print(f"  📊 Thống kê dịch EN→VI:")
     print(f"     ✅ {en_translated}/{en_total} bài có bản dịch")
     if en_fallback > 0:
-        print(f"     ⚠️  {en_fallback}/{en_total} bài dùng title gốc (AI không dịch)")
-        for item in en_missing_details[:5]:
-            print(f"        [{item['index']}] {item['source']}: {item['title']}")
-        if len(en_missing_details) > 5:
-            print(f"        ... và {len(en_missing_details) - 5} bài khác")
+        print(f"     ⚠️  {en_fallback}/{en_total} bài dùng title gốc")
 
     return articles
 
 
 # ─── GOOGLE TRENDS ────────────────────────────────────────────
 def fetch_google_trends():
-    """Lấy top trending searches tại Việt Nam từ Google Trends RSS"""
+    """Lấy top trending từ Google Trends RSS"""
     print("  → Fetch Google Trends VN...")
     try:
         import xml.etree.ElementTree as ET
@@ -425,67 +483,61 @@ def fetch_google_trends():
         return []
 
 
-# ─── YOUTUBE TRENDING (SCRAPING - KHÔNG CẦN API KEY) ──────────
+# ─── YOUTUBE TRENDING (Dùng Invidious API - không cần key) ────
 def fetch_youtube_trending():
-    """Scrape YouTube Trending Vietnam (KHÔNG cần API key)"""
-    print("  → Fetch YouTube Trending VN (scraping)...")
-    try:
-        from bs4 import BeautifulSoup
-        
-        url = "https://www.youtube.com/feed/trending?gl=VN"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8",
-        }
-        
-        resp = requests.get(url, headers=headers, timeout=20)
-        resp.raise_for_status()
-        
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        items = []
-        
-        # Tìm video renderers
-        video_renderers = soup.find_all('ytd-video-renderer')[:10]
-        
-        for i, renderer in enumerate(video_renderers, 1):
-            try:
-                title_elem = renderer.find('a', id='video-title')
-                if not title_elem:
-                    continue
-                    
-                title = title_elem.get_text(strip=True)
-                video_url = title_elem.get('href', '')
-                if video_url.startswith('/'):
-                    video_url = f"https://www.youtube.com{video_url}"
-                
-                video_id = video_url.split('v=')[1].split('&')[0] if 'v=' in video_url else ''
-                
-                channel_elem = renderer.find('ytd-channel-name')
-                channel = channel_elem.get_text(strip=True) if channel_elem else ''
-                
-                thumb_elem = renderer.find('img')
-                thumbnail = thumb_elem.get('src', '') if thumb_elem else ''
-                if thumbnail.startswith('//'):
-                    thumbnail = f"https:{thumbnail}"
-                
-                items.append({
-                    "rank": i,
-                    "videoId": video_id,
-                    "title": title,
-                    "channel": channel,
-                    "thumbnail": thumbnail,
-                    "url": video_url,
-                })
-            except Exception as e:
-                print(f"     ⚠️  Lỗi parse video {i}: {e}")
+    """Lấy YouTube Trending VN qua Invidious API (public, không cần key)"""
+    print("  → Fetch YouTube Trending VN (Invidious)...")
+    
+    # Danh sách public Invidious instances
+    instances = [
+        "https://invidious.io.lol",
+        "https://inv.nadeko.net",
+        "https://invidious.privacyredirect.com",
+        "https://vid.puffyan.us",
+    ]
+    
+    for instance in instances:
+        try:
+            url = f"{instance}/api/v1/auth/playlists"
+            # Endpoint trending
+            trending_url = f"{instance}/api/v1/trending?region=VN&type=music,gaming,movies"
+            
+            resp = requests.get(
+                trending_url,
+                timeout=15,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            
+            if resp.status_code != 200:
                 continue
-        
-        print(f"     ✅ {len(items)} trending videos")
-        return items
-        
-    except Exception as e:
-        print(f"     ❌ Lỗi YouTube scraping: {e}")
-        return []
+            
+            data = resp.json()
+            if not isinstance(data, list) or not data:
+                continue
+            
+            items = []
+            for i, v in enumerate(data[:10], 1):
+                video_id = v.get("videoId", "")
+                items.append({
+                    "rank":      i,
+                    "videoId":   video_id,
+                    "title":     v.get("title", ""),
+                    "channel":   v.get("author", ""),
+                    "thumbnail": f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg",
+                    "viewCount": v.get("viewCount", 0),
+                    "url":       f"https://www.youtube.com/watch?v={video_id}",
+                })
+            
+            if items:
+                print(f"     ✅ {len(items)} trending videos (via {instance})")
+                return items
+                
+        except Exception as e:
+            print(f"     ⚠️  Instance {instance} lỗi: {e}")
+            continue
+    
+    print(f"     ❌ Tất cả Invidious instances đều fail")
+    return []
 
 
 # ─── SAVE TO FIREBASE ─────────────────────────────────────────
@@ -518,8 +570,8 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
             ref.child(f"articles/{TODAY}/{a['id']}/articleIndex").set(idx)
             upd_count += 1
     
-    print(f"     📥 {new_count} bài mới (trong đó {new_with_vi} bài EN đã dịch, {new_no_vi} bài EN thiếu dịch)")
-    print(f"     🔄 {upd_count} bài cũ đã cập nhật bản dịch")
+    print(f"     📥 {new_count} bài mới ({new_with_vi} EN đã dịch, {new_no_vi} EN thiếu)")
+    print(f"     🔄 {upd_count} bài cũ cập nhật")
 
     ref.child(f"clusters/{TODAY}").set(ai_result.get("clusters", []))
     ref.child(f"trends/{TODAY}").set(ai_result.get("trends", []))
@@ -540,7 +592,7 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
     print("  ✅ Firebase xong")
 
 
-# ── MAIN ─────────────────────────────────────────────────────
+# ─── MAIN ─────────────────────────────────────────────────────
 def main():
     print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
