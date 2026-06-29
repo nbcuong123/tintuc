@@ -11,6 +11,7 @@ from firebase_admin import credentials, db
 
 # ─── CONFIG ───────────────────────────────────────────────────
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+YOUTUBE_API_KEY    = os.environ.get("YOUTUBE_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 OPENROUTER_MODEL   = "openrouter/auto"
 
@@ -33,7 +34,7 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI     = 100
+MAX_ARTICLES_FOR_AI     = 40
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -68,9 +69,9 @@ def scrape_all_sources():
                 articles.append({
                     "id":       article_id(link),
                     "title":    title,
-                    "title_vi": "",
+                    "title_vi": "",      # sẽ được điền sau khi AI dịch
                     "summary":  summary,
-                    "summary_vi": "",
+                    "summary_vi": "",    # sẽ được điền sau khi AI dịch
                     "url":      link,
                     "source":   source["name"],
                     "lang":     source["lang"],
@@ -86,106 +87,63 @@ def scrape_all_sources():
     return articles
 
 
-def balance_languages(articles):
-    """Trộn đều bài VI và EN để đảm bảo AI có cả 2 ngôn ngữ"""
-    vi_articles = [a for a in articles if a["lang"] == "vi"]
-    en_articles = [a for a in articles if a["lang"] == "en"]
-    
-    print(f"  → Balance: {len(vi_articles)} VI, {len(en_articles)} EN")
-    
-    # Trộn xen kẽ: 2 VI, 1 EN, lặp lại
-    balanced = []
-    vi_idx, en_idx = 0, 0
-    
-    while vi_idx < len(vi_articles) or en_idx < len(en_articles):
-        # Thêm 2 bài VI
-        for _ in range(2):
-            if vi_idx < len(vi_articles):
-                balanced.append(vi_articles[vi_idx])
-                vi_idx += 1
-        # Thêm 1 bài EN
-        if en_idx < len(en_articles):
-            balanced.append(en_articles[en_idx])
-            en_idx += 1
-    
-    print(f"  ✅ Đã trộn: {len(balanced)} bài (xen kẽ VI-EN)")
-    return balanced
-
-
 # ─── AI ───────────────────────────────────────────────────────
 def build_prompt(articles):
-    """Prompt rõ ràng, bắt buộc AI trả về ĐỦ tất cả bài"""
-    subset = articles[:MAX_ARTICLES_FOR_AI]
-    n = len(subset)
-    en_count = sum(1 for a in subset if a.get("lang") == "en")
-
     articles_text = ""
-    for i, a in enumerate(subset, 1):
-        flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
-        articles_text += f"\n[{i}] {flag} | {a['source']} | {a['cat'].upper()}\nTitle: {a['title']}\nSummary: {a['summary'][:250]}\n---"
+    for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
+        lang_note = " [EN→VI]" if a.get("lang") == "en" else ""
+        articles_text += f"\n[{i}]{lang_note} [{a['source']}] [{a['cat'].upper()}]\nTiêu đề: {a['title']}\nTóm tắt: {a['summary'][:200]}\n---"
 
-    return f"""Bạn là biên tập viên tin tức. Trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick, KHÔNG text ngoài JSON).
+    n = len(articles[:MAX_ARTICLES_FOR_AI])
+    return f"""Bạn là biên tập viên tin tức cao cấp, thành thạo dịch Anh-Việt. Phân tích {n} bài báo và trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick, KHÔNG text ngoài JSON).
 
-TỔNG: {n} bài, trong đó {en_count} bài tiếng Anh (🇬🇧EN) cần dịch sang tiếng Việt.
+Bài đánh dấu [EN->VI] là bài tiếng Anh — dịch title_vi và summary_vi sang tiếng Việt tự nhiên.
 
-NHIỆM VỤ articles_vi:
-- PHẢI có đúng {n} phần tử, "index" chạy từ 1 đến {n}
-- Bài 🇻🇳VI: copy nguyên title_vi = title, summary_vi = summary
-- Bài 🇬🇧EN: dịch title_vi và summary_vi sang tiếng Việt TỰ NHIÊN, súc tích
-
-JSON format:
 {{
   "articles_vi": [
-    {{"index": 1, "title_vi": "...", "summary_vi": "..."}},
-    {{"index": 2, "title_vi": "...", "summary_vi": "..."}},
-    ...đúng {n} phần tử...
+    {{
+      "index": 1,
+      "title_vi": "Tiêu đề tiếng Việt",
+      "summary_vi": "Tóm tắt tiếng Việt 1-2 câu"
+    }}
   ],
   "clusters": [
-    {{"topic": "Chủ đề", "summary": "Tóm tắt 2-3 câu", "articles": [1,3,5], "importance": 8}}
+    {{
+      "topic": "Tên chủ đề ngắn gọn tiếng Việt",
+      "summary": "Tóm tắt 2-3 câu tiếng Việt",
+      "articles": [1, 3, 5],
+      "importance": 8
+    }}
   ],
   "trends": [
-    {{"rank": 1, "topic": "Xu hướng", "reason": "Lý do", "category": "economy", "score": 95}}
+    {{
+      "rank": 1,
+      "topic": "Tên xu hướng tiếng Việt",
+      "reason": "Lý do 1 câu",
+      "category": "economy",
+      "score": 95
+    }}
   ],
   "digest": {{
-    "headline": "Tiêu đề tổng kết ngày",
-    "overview": "Tổng quan 3-5 câu",
+    "headline": "Tiêu đề tổng kết ngày (1 câu ấn tượng)",
+    "overview": "Nhận định tổng quan 3-5 câu tiếng Việt",
     "key_points": ["Điểm 1", "Điểm 2", "Điểm 3", "Điểm 4", "Điểm 5"]
   }}
 }}
 
-Yêu cầu khác:
-- clusters: 5-10 nhóm, importance 1-10
-- trends: top 5, score 1-100, category chỉ: economy/world/vn
-- Tên riêng giữ nguyên
+Yêu cầu:
+- articles_vi: dịch/giữ TẤT CẢ {n} bài, index khớp số thứ tự [N]
+- clusters: 5-10 nhóm chủ đề, importance 1-10
+- trends: top 5, score 1-100, category chỉ dùng: economy/world/vn
+- Tất cả text tiếng Việt tự nhiên, tên riêng giữ nguyên
 
-DANH SÁCH BÀI:
-{articles_text}
-
-⚠️ QUAN TRỌNG: articles_vi PHẢI có ĐÚNG {n} phần tử với index từ 1 đến {n}. Bắt đầu JSON ngay:"""
-
-
-def parse_ai_response(text):
-    """Parse JSON từ response AI, xử lý nhiều trường hợp lỗi"""
-    text = text.strip()
-    text = re.sub(r"^```json\s*", "", text)
-    text = re.sub(r"^```\s*",     "", text)
-    text = re.sub(r"\s*```$",     "", text)
-    text = text.strip()
-
-    match = re.search(r"\{[\s\S]*\}", text)
-    if match:
-        text = match.group(0)
-
-    return json.loads(text)
+Danh sách bài báo:
+{articles_text}"""
 
 
 def process_with_ai(articles):
     print("  → Gọi OpenRouter AI...")
     prompt = build_prompt(articles)
-    subset_count = len(articles[:MAX_ARTICLES_FOR_AI])
-
-    resp = None
-    text = ""
     try:
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -199,203 +157,163 @@ def process_with_ai(articles):
                 "model":       OPENROUTER_MODEL,
                 "messages":    [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens":  12000,
+                "max_tokens":  8000,
             },
-            timeout=240,
+            timeout=120,
         )
         resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"]
-        print(f"  → AI raw response length: {len(text)} chars")
+        text = resp.json()["choices"][0]["message"]["content"].strip()
+        text = re.sub(r"^```json\s*", "", text)
+        text = re.sub(r"^```\s*",     "", text)
+        text = re.sub(r"\s*```$",     "", text)
 
-        result = parse_ai_response(text)
-
-        arts_vi = result.get("articles_vi", [])
-        if len(arts_vi) < subset_count:
-            print(f"  ⚠️  AI trả về thiếu: {len(arts_vi)}/{subset_count} bài. Thử retry...")
-            result = retry_ai(articles, prompt, result)
-
+        result   = json.loads(text)
         clusters = result.get("clusters", [])
         trends   = result.get("trends", [])
         arts_vi  = result.get("articles_vi", [])
-        print(f"  ✅ AI xong: {len(arts_vi)} bài dịch, {len(clusters)} clusters, {len(trends)} trends")
+        print(f"  ✅ AI xử lý xong: {len(clusters)} clusters, {len(trends)} trends, {len(arts_vi)} bài dịch")
         return result
 
-    except json.JSONDecodeError as e:
-        print(f"  ❌ JSON parse lỗi: {e}")
-        print(f"  Response text (đầu): {text[:500] if text else 'N/A'}")
-        return fallback_result()
     except Exception as e:
         print(f"  ❌ AI lỗi: {e}")
-        if resp is not None and hasattr(resp, 'text'):
+        if 'resp' in dir() and hasattr(resp, 'text'):
             print(f"  Response: {resp.text[:500]}")
-        return fallback_result()
-
-
-def retry_ai(articles, original_prompt, partial_result):
-    """Retry khi AI trả về thiếu articles_vi"""
-    print("  → Retry với prompt bổ sung...")
-    subset_count = len(articles[:MAX_ARTICLES_FOR_AI])
-    existing_indices = [a.get("index") for a in partial_result.get("articles_vi", [])]
-    missing = [i for i in range(1, subset_count + 1) if i not in existing_indices]
-
-    missing_text = ""
-    for i in missing:
-        a = articles[i - 1] if i - 1 < len(articles) else None
-        if a:
-            flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
-            missing_text += f"\n[{i}] {flag} | {a['source']}\nTitle: {a['title']}\nSummary: {a['summary'][:200]}\n---"
-
-    retry_prompt = f"""Lần trước bạn trả về thiếu {len(missing)} bài. Bổ sung ĐỦ các bài còn thiếu sau:
-
-{missing_text}
-
-Trả về JSON chỉ có articles_vi với đúng {len(missing)} phần tử thiếu:
-{{"articles_vi": [{{"index": {missing[0] if missing else 1}, "title_vi": "...", "summary_vi": "..."}}, ...]}}
-
-Bắt đầu JSON ngay:"""
-
-    try:
-        resp = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type":  "application/json",
-                "HTTP-Referer":  "https://nbcuong123.github.io/tintuc/",
-                "X-Title":       "Tin247 News Digest",
-            },
-            json={
-                "model":       OPENROUTER_MODEL,
-                "messages":    [{"role": "user", "content": retry_prompt}],
-                "temperature": 0.2,
-                "max_tokens":  6000,
-            },
-            timeout=180,
-        )
-        resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"]
-        retry_data = parse_ai_response(text)
-
-        existing = {a["index"]: a for a in partial_result.get("articles_vi", []) if "index" in a}
-        for item in retry_data.get("articles_vi", []):
-            idx = item.get("index")
-            if idx is not None:
-                existing[idx] = item
-
-        partial_result["articles_vi"] = [existing[k] for k in sorted(existing.keys())]
-        print(f"  ✅ Retry xong: giờ có {len(partial_result['articles_vi'])} bài")
-        return partial_result
-    except Exception as e:
-        print(f"  ❌ Retry lỗi: {e}")
-        return partial_result
-
-
-def fallback_result():
-    """Kết quả fallback khi AI lỗi hoàn toàn"""
-    return {
-        "clusters": [],
-        "trends": [],
-        "articles_vi": [],
-        "digest": {
+        return {"clusters": [], "trends": [], "articles_vi": [], "digest": {
             "headline": "Tổng hợp tin ngày " + TODAY,
             "overview": "Không thể tạo tóm tắt tự động.",
             "key_points": []
-        }
-    }
+        }}
 
 
 # ─── MERGE TRANSLATIONS ────────────────────────────────────────
 def merge_translations(articles, ai_result):
-    """Gộp bản dịch AI vào từng article - đảm bảo 100% bài EN có title_vi"""
+    """Gộp bản dịch AI vào từng article"""
     arts_vi = ai_result.get("articles_vi", [])
-
-    lookup = {}
-    for item in arts_vi:
-        idx = item.get("index")
-        if idx is not None:
-            lookup[int(idx)] = item
-
-    en_total = 0
-    en_translated = 0
-    en_fallback = 0
-    en_missing_details = []
+    lookup = {item["index"]: item for item in arts_vi if "index" in item}
+    print(f"  → Merge: {len(lookup)} bản dịch cho {len(articles[:MAX_ARTICLES_FOR_AI])} bài")
+    # Debug: in 3 mẫu đầu
+    sample = arts_vi[:3] if arts_vi else []
+    print(f"  DEBUG arts_vi sample: {sample}")
+    print(f"  DEBUG lookup keys: {list(lookup.keys())[:5]}")
 
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
+        vi = lookup.get(i, {})
         if a["lang"] == "en":
-            en_total += 1
-            vi = lookup.get(i, {})
-            
-            t_vi = (vi.get("title_vi") or "").strip()
-            s_vi = (vi.get("summary_vi") or "").strip()
-
-            has_valid_translation = (
-                t_vi and 
-                t_vi != a["title"] and
-                len(t_vi) > 5
-            )
-
-            if has_valid_translation:
-                a["title_vi"] = t_vi
-                a["summary_vi"] = s_vi if s_vi else a["summary"]
-                en_translated += 1
-            else:
-                a["title_vi"] = a["title"]
-                a["summary_vi"] = a["summary"]
-                en_fallback += 1
-                en_missing_details.append({
-                    "index": i,
-                    "source": a["source"],
-                    "title": a["title"][:50]
-                })
+            t = vi.get("title_vi", "").strip()
+            s = vi.get("summary_vi", "").strip()
+            a["title_vi"]   = t if t else a["title"]
+            a["summary_vi"] = s if s else a["summary"]
+            if not t:
+                title_short = a['title'][:50]
+                print(f"     ⚠️  Thiếu dịch bài [{i}]: {title_short}")
         else:
-            a["title_vi"] = a["title"]
+            a["title_vi"]   = a["title"]
             a["summary_vi"] = a["summary"]
-
-    print(f"  📊 Thống kê dịch EN→VI:")
-    print(f"     ✅ {en_translated}/{en_total} bài có bản dịch")
-    if en_fallback > 0:
-        print(f"     ⚠️  {en_fallback}/{en_total} bài dùng title gốc (AI không dịch)")
-        for item in en_missing_details[:5]:
-            print(f"        [{item['index']}] {item['source']}: {item['title']}")
-        if len(en_missing_details) > 5:
-            print(f"        ... và {len(en_missing_details) - 5} bài khác")
-
     return articles
 
 
+
+# ─── GOOGLE TRENDS ────────────────────────────────────────────
+def fetch_google_trends():
+    """Lấy top trending searches tại Việt Nam từ Google Trends RSS"""
+    print("  → Fetch Google Trends VN...")
+    try:
+        import xml.etree.ElementTree as ET
+        url = "https://trends.google.com/trending/rss?geo=VN"
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+        ns = {"ht": "https://trends.google.com/trending/rss"}
+        items = []
+        for item in root.findall(".//item"):
+            title = item.findtext("title", "").strip()
+            traffic = item.findtext("ht:approx_traffic", "", ns).strip()
+            news_items = []
+            for ni in item.findall("ht:news_item", ns)[:2]:
+                news_title = ni.findtext("ht:news_item_title", "", ns).strip()
+                news_url   = ni.findtext("ht:news_item_url", "", ns).strip()
+                if news_title:
+                    news_items.append({"title": news_title, "url": news_url})
+            if title:
+                items.append({
+                    "rank":       len(items) + 1,
+                    "keyword":    title,
+                    "traffic":    traffic,
+                    "news_items": news_items,
+                })
+            if len(items) >= 10:
+                break
+        print(f"     {len(items)} trending keywords")
+        return items
+    except Exception as e:
+        print(f"     ❌ Lỗi Google Trends: {e}")
+        return []
+
+
+# ─── YOUTUBE TRENDING ─────────────────────────────────────────
+def fetch_youtube_trending():
+    """Lấy top 10 video trending tại Việt Nam qua YouTube Data API v3"""
+    print("  → Fetch YouTube Trending VN...")
+    if not YOUTUBE_API_KEY:
+        print("     ❌ Thiếu YOUTUBE_API_KEY")
+        return []
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "part":                  "snippet,statistics",
+                "chart":                 "mostPopular",
+                "regionCode":            "VN",
+                "maxResults":            10,
+                "key":                   YOUTUBE_API_KEY,
+                "videoCategoryId":       "",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = []
+        for i, v in enumerate(data.get("items", []), 1):
+            sn    = v.get("snippet", {})
+            stats = v.get("statistics", {})
+            items.append({
+                "rank":        i,
+                "videoId":     v.get("id", ""),
+                "title":       sn.get("title", ""),
+                "channel":     sn.get("channelTitle", ""),
+                "thumbnail":   sn.get("thumbnails", {}).get("medium", {}).get("url", ""),
+                "publishedAt": sn.get("publishedAt", ""),
+                "viewCount":   int(stats.get("viewCount", 0)),
+                "likeCount":   int(stats.get("likeCount", 0)),
+                "url":         f"https://www.youtube.com/watch?v={v.get('id','')}",
+            })
+        print(f"     {len(items)} trending videos")
+        return items
+    except Exception as e:
+        print(f"     ❌ Lỗi YouTube: {e}")
+        return []
+
 # ─── SAVE TO FIREBASE ─────────────────────────────────────────
-def save_to_firebase(ref, articles, ai_result):
+def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trends=None):
     print("  → Lưu lên Firebase...")
 
     existing  = ref.child(f"articles/{TODAY}").get() or {}
     new_count = 0
     upd_count = 0
-    new_with_vi = 0
-    new_no_vi = 0
-    
-    # Lặp với index để lưu articleIndex
-    for idx, a in enumerate(articles, 1):
-        t_vi = a.get("title_vi", "")
-        s_vi = a.get("summary_vi", "")
-        
-        # Thêm articleIndex vào article
-        a["articleIndex"] = idx
-        
+    for a in articles:
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
-            if a["lang"] == "en":
-                if t_vi and t_vi != a["title"]:
-                    new_with_vi += 1
-                else:
-                    new_no_vi += 1
         else:
+            # Luôn update title_vi/summary_vi
+            t_vi = a.get("title_vi", "")
+            s_vi = a.get("summary_vi", "")
+            if a.get("lang") == "en" and upd_count < 3:
+                print(f"  DEBUG update [{a['id']}] lang=en title_vi={repr(t_vi[:40])}")
             ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(t_vi)
             ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(s_vi)
-            ref.child(f"articles/{TODAY}/{a['id']}/articleIndex").set(idx)
             upd_count += 1
-    
-    print(f"     📥 {new_count} bài mới (trong đó {new_with_vi} bài EN đã dịch, {new_no_vi} bài EN thiếu dịch)")
-    print(f"     🔄 {upd_count} bài cũ đã cập nhật bản dịch")
+    print(f"     {new_count} bài mới, {upd_count} bài cập nhật dịch")
 
     ref.child(f"clusters/{TODAY}").set(ai_result.get("clusters", []))
     ref.child(f"trends/{TODAY}").set(ai_result.get("trends", []))
@@ -405,6 +323,11 @@ def save_to_firebase(ref, articles, ai_result):
     digest["updatedAt"]     = datetime.now(VN_TZ).isoformat()
     digest["totalArticles"] = len(articles)
     ref.child(f"digest/{TODAY}").set(digest)
+
+    if google_trends:
+        ref.child(f"google_trends/{TODAY}").set(google_trends)
+    if youtube_trends:
+        ref.child(f"youtube_trends/{TODAY}").set(youtube_trends)
 
     ref.child("meta/lastUpdated").set(datetime.now(VN_TZ).isoformat())
     ref.child("meta/lastDate").set(TODAY)
@@ -424,19 +347,20 @@ def main():
         print("❌ Không có bài nào, dừng.")
         return
 
-    print("\n2.5️⃣ Balance VI/EN...")
-    articles = balance_languages(articles)
-
     print("\n3️⃣  Xử lý AI + dịch EN→VI...")
     ai_result = process_with_ai(articles)
 
     print("\n4️⃣  Merge bản dịch...")
     articles = merge_translations(articles, ai_result)
 
-    print("\n5️⃣  Lưu Firebase...")
-    save_to_firebase(ref, articles, ai_result)
+    print("\n5️⃣  Fetch Google Trends + YouTube...")
+    google_trends  = fetch_google_trends()
+    youtube_trends = fetch_youtube_trending()
 
-    print(f"\n✅ Hoàn tất! {len(articles)} bài, {len(ai_result.get('clusters',[]))} clusters, {len(ai_result.get('trends',[]))} trends")
+    print("\n6️⃣  Lưu Firebase...")
+    save_to_firebase(ref, articles, ai_result, google_trends, youtube_trends)
+
+    print(f"\n✅ Hoàn tất! {len(articles)} bài, {len(ai_result.get('clusters',[]))} clusters, {len(google_trends)} gtrends, {len(youtube_trends)} yt")
 
 if __name__ == "__main__":
     main()
