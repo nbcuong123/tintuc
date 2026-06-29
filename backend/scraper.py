@@ -190,6 +190,10 @@ def merge_translations(articles, ai_result):
     arts_vi = ai_result.get("articles_vi", [])
     lookup = {item["index"]: item for item in arts_vi if "index" in item}
     print(f"  → Merge: {len(lookup)} bản dịch cho {len(articles[:MAX_ARTICLES_FOR_AI])} bài")
+    # Debug: in 3 mẫu đầu
+    sample = arts_vi[:3] if arts_vi else []
+    print(f"  DEBUG arts_vi sample: {sample}")
+    print(f"  DEBUG lookup keys: {list(lookup.keys())[:5]}")
 
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
         vi = lookup.get(i, {})
