@@ -590,7 +590,7 @@ function renderClusters(articles, clusters, filter) {
   }
 
   if (!filtered.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🗞️</div><div class="empty-title">Không có tin trong mục này</div><p style="color:var(--text3);font-size:12px;margin-top:6px;">Hãy thử chạy scraper để cập nhật dữ liệu</p></div>`;
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🗞️</div><div class="empty-title">Không có tin trong mục này</div></div>`;
     return;
   }
 
@@ -601,8 +601,8 @@ function renderClusters(articles, clusters, filter) {
     const relArts = artArr.filter(a => idxs.includes(a.articleIndex));
 
     const articlesHtml = relArts.map(a => {
-      // Ưu tiên title_vi nếu có, fallback về title
-      const displayTitle = a.title_vi && a.title_vi.trim() ? a.title_vi : a.title;
+      // LOGIC ĐƠN GIẢN: nếu có title_vi thì dùng, không thì dùng title
+      const displayTitle = a.title_vi ? a.title_vi : a.title;
       
       return `
       <div class="article-item">
@@ -625,12 +625,11 @@ function renderClusters(articles, clusters, filter) {
           <div class="cluster-toggle" id="ct${ci}">⌄</div>
         </div>
         <div class="cluster-articles" id="ca${ci}">
-          ${articlesHtml || '<div style="padding:12px 16px;color:var(--text3);font-size:12px">Không có bài liên quan</div>'}
+          ${articlesHtml}
         </div>
       </div>`;
   }).join("");
 }
-
 // ── FILTER ────────────────────────────────────────────────────
 window.setFilter = function(f, btn) {
   currentFilter = f;
