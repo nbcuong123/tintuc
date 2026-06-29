@@ -112,7 +112,7 @@ def scrape_all_sources():
 
 def init_gemini():
     genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.0-flash")
+    return genai.GenerativeModel("gemini-1.5-flash")
 
 
 def build_prompt(articles: list) -> str:
