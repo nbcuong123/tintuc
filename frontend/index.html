@@ -40,7 +40,6 @@
     min-height: 100vh;
   }
 
-  /* ── TOP BAR ── */
   .topbar {
     position: sticky; top: 0; z-index: 100;
     background: rgba(13,15,20,0.92);
@@ -92,10 +91,8 @@
   .spinner { animation: spin 0.8s linear infinite; display: inline-block; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── LAYOUT ── */
   .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
 
-  /* ── DIGEST BANNER ── */
   .digest-banner {
     background: linear-gradient(135deg, var(--bg2) 0%, #1a1e35 100%);
     border: 1px solid var(--border);
@@ -129,7 +126,6 @@
   }
   .digest-point::before { content: "•"; color: var(--accent); font-size: 16px; }
 
-  /* ── GRID ── */
   .main-grid {
     display: grid;
     grid-template-columns: 260px 1fr;
@@ -137,7 +133,6 @@
     align-items: start;
   }
 
-  /* ── SIDEBAR: TRENDS ── */
   .sidebar { display: flex; flex-direction: column; gap: 16px; }
   .card {
     background: var(--bg2); border: 1px solid var(--border);
@@ -178,7 +173,6 @@
   }
   .trend-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
 
-  /* ── CLUSTERS / MAIN CONTENT ── */
   .content-area { display: flex; flex-direction: column; gap: 16px; }
 
   .filter-bar {
@@ -197,7 +191,6 @@
   .filter-btn.cat-eco.active   { background: var(--cat-eco);   border-color: var(--cat-eco);   color: #000; }
   .filter-btn.cat-vn.active    { background: var(--cat-vn);    border-color: var(--cat-vn); }
 
-  /* Cluster card */
   .cluster-card {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius); overflow: hidden;
@@ -259,7 +252,6 @@
   .cat-world { background: rgba(160,79,247,0.15); color: var(--cat-world); }
   .cat-economy { background: rgba(247,169,79,0.15); color: var(--cat-eco); }
 
-  /* ── STATS ROW ── */
   .stats-row {
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
     margin-bottom: 4px;
@@ -276,7 +268,6 @@
   }
   .stat-label { font-size: 11px; color: var(--text3); margin-top: 4px; }
 
-  /* ── SHARE LINK ── */
   .share-box {
     display: flex; gap: 8px; align-items: center;
     background: var(--bg3); border: 1px solid var(--border);
@@ -296,7 +287,6 @@
   .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
   .btn-copy.copied { background: var(--accent3); color: #000; border-color: var(--accent3); }
 
-  /* ── LOADING / EMPTY ── */
   .loading-state {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 60px 20px; gap: 12px;
@@ -313,7 +303,6 @@
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
   .empty-title { font-size: 16px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
 
-  /* ── TOAST ── */
   .toast {
     position: fixed; bottom: 24px; right: 24px; z-index: 9999;
     background: var(--bg3); border: 1px solid var(--border);
@@ -327,7 +316,6 @@
   .toast.success { border-left: 3px solid var(--accent3); }
   .toast.error   { border-left: 3px solid var(--danger); }
 
-  /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
     .main-grid { grid-template-columns: 1fr; }
     .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -337,7 +325,6 @@
     .container { padding: 12px; }
   }
 
-  /* ── UPDATED AT ── */
   #updatedAt {
     font-size: 11px; color: var(--text3);
     text-align: right; margin-top: -10px; margin-bottom: 14px;
@@ -346,7 +333,6 @@
 </head>
 <body>
 
-<!-- TOP BAR -->
 <div class="topbar">
   <div class="logo">Tin<span>247</span></div>
   <div class="topbar-meta" id="topbarMeta">Tổng hợp tin tức · AI phân tích</div>
@@ -360,11 +346,9 @@
   </button>
 </div>
 
-<!-- MAIN -->
 <div class="container">
   <div id="updatedAt"></div>
 
-  <!-- DIGEST BANNER -->
   <div id="digestBanner" class="digest-banner" style="display:none">
     <div class="digest-label">📋 Tổng kết hôm nay</div>
     <div class="digest-headline" id="digestHeadline"></div>
@@ -372,7 +356,6 @@
     <div class="digest-points" id="digestPoints"></div>
   </div>
 
-  <!-- STATS -->
   <div class="stats-row" id="statsRow">
     <div class="stat-card"><div class="stat-num" id="statArticles">—</div><div class="stat-label">Bài báo</div></div>
     <div class="stat-card"><div class="stat-num" id="statClusters">—</div><div class="stat-label">Chủ đề</div></div>
@@ -380,12 +363,8 @@
     <div class="stat-card"><div class="stat-num" id="statTrends">—</div><div class="stat-label">Xu hướng</div></div>
   </div>
 
-  <!-- MAIN GRID -->
   <div class="main-grid">
-
-    <!-- SIDEBAR -->
     <div class="sidebar">
-      <!-- TRENDS -->
       <div class="card">
         <div class="card-header">
           <span>🔥</span>
@@ -396,7 +375,6 @@
         </div>
       </div>
 
-      <!-- SHARE -->
       <div class="card">
         <div class="card-header">
           <span>🔗</span>
@@ -411,9 +389,7 @@
       </div>
     </div>
 
-    <!-- CONTENT -->
     <div class="content-area">
-      <!-- FILTER -->
       <div class="filter-bar">
         <button class="filter-btn active" onclick="setFilter('all', this)">Tất cả</button>
         <button class="filter-btn cat-vn"    onclick="setFilter('vn', this)">🇻🇳 Việt Nam</button>
@@ -421,7 +397,6 @@
         <button class="filter-btn cat-eco"   onclick="setFilter('economy', this)">💹 Kinh tế</button>
       </div>
 
-      <!-- CLUSTERS -->
       <div id="clustersContainer">
         <div class="loading-state">
           <div class="loading-dot"></div>
@@ -432,13 +407,13 @@
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<!-- FIREBASE -->
 <script type="module">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+console.log("✅ VERSION 3.0 - Code đã load thành công");
 
 const cfg = {
   apiKey: "AIzaSyAp8BhBUkJLwONnp3Eb8AEf8OVRMRQaPmg",
@@ -453,7 +428,6 @@ const app = getApps().length ? getApp() : initializeApp(cfg);
 const database = getDatabase(app);
 const dbRef = ref(database);
 
-// ── STATE ──────────────────────────────────────────────────────
 let currentDate  = todayStr();
 let allArticles  = {};
 let allClusters  = [];
@@ -473,7 +447,6 @@ function offsetDate(str, days) {
   return d.toISOString().slice(0,10);
 }
 
-// ── INIT ──────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   const dp = document.getElementById("datePicker");
   dp.value = currentDate;
@@ -501,7 +474,6 @@ window.addEventListener("DOMContentLoaded", () => {
   loadDate(currentDate);
 });
 
-// ── LOAD DATA ─────────────────────────────────────────────────
 window.loadDate = async function(date) {
   setRefreshing(true);
   try {
@@ -540,7 +512,6 @@ window.loadDate = async function(date) {
   }
 };
 
-// ── RENDER ────────────────────────────────────────────────────
 function renderDigest(digest) {
   const banner = document.getElementById("digestBanner");
   if (!digest?.headline) { banner.style.display = "none"; return; }
@@ -601,7 +572,16 @@ function renderClusters(articles, clusters, filter) {
     const relArts = artArr.filter(a => idxs.includes(a.articleIndex));
 
     const articlesHtml = relArts.map(a => {
-      // LOGIC ĐƠN GIẢN: nếu có title_vi thì dùng, không thì dùng title
+      // DEBUG: Log bài EN
+      if (a.lang === "en") {
+        console.log("🔍 Bài EN:", {
+          source: a.source,
+          title: a.title,
+          title_vi: a.title_vi,
+          hasTitleVi: !!a.title_vi
+        });
+      }
+      
       const displayTitle = a.title_vi ? a.title_vi : a.title;
       
       return `
@@ -630,7 +610,7 @@ function renderClusters(articles, clusters, filter) {
       </div>`;
   }).join("");
 }
-// ── FILTER ────────────────────────────────────────────────────
+
 window.setFilter = function(f, btn) {
   currentFilter = f;
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
@@ -638,7 +618,6 @@ window.setFilter = function(f, btn) {
   renderClusters(allArticles, allClusters, f);
 };
 
-// ── TOGGLE CLUSTER ─────────────────────────────────────────────
 window.toggleCluster = function(ci) {
   const articles = document.getElementById("ca" + ci);
   const toggle   = document.getElementById("ct" + ci);
@@ -646,7 +625,6 @@ window.toggleCluster = function(ci) {
   toggle.classList.toggle("open", open);
 };
 
-// ── SHARE ─────────────────────────────────────────────────────
 window.copyShareLink = function() {
   const url = `${location.origin}${location.pathname}?date=${currentDate}`;
   document.getElementById("shareUrl").value = url;
@@ -658,7 +636,6 @@ window.copyShareLink = function() {
   });
 };
 
-// ── HELPERS ───────────────────────────────────────────────────
 function esc(s) {
   if (!s) return "";
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
