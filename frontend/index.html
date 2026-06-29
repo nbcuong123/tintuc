@@ -585,7 +585,8 @@ function renderClusters(articles, clusters, filter) {
   if (filter !== "all") {
     filtered = clusters.filter(c => {
       const idxs = Array.isArray(c.articles) ? c.articles : [];
-      const relevant = artArr.filter((_,i) => idxs.includes(i+1));
+      // Tìm articles có articleIndex nằm trong idxs
+      const relevant = artArr.filter(a => idxs.includes(a.articleIndex));
       return relevant.some(a => a.cat === filter);
     });
   }
@@ -600,7 +601,8 @@ function renderClusters(articles, clusters, filter) {
 
   el.innerHTML = sorted.map((c, ci) => {
     const idxs = Array.isArray(c.articles) ? c.articles : [];
-    const relArts = artArr.filter((_,i) => idxs.includes(i+1));
+    // Tìm articles có articleIndex nằm trong idxs
+    const relArts = artArr.filter(a => idxs.includes(a.articleIndex));
 
     const articlesHtml = relArts.map(a => `
       <div class="article-item">
