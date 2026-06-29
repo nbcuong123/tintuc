@@ -33,7 +33,7 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI     = 100  # ← ĐỔI TỪ 40 THÀNH 100
+MAX_ARTICLES_FOR_AI     = 100
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -199,9 +199,9 @@ def process_with_ai(articles):
                 "model":       OPENROUTER_MODEL,
                 "messages":    [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens":  12000,  # tăng từ 8000 lên 12000 để chứa 100 bài
+                "max_tokens":  12000,
             },
-            timeout=240,  # tăng timeout
+            timeout=240,
         )
         resp.raise_for_status()
         text = resp.json()["choices"][0]["message"]["content"]
@@ -305,7 +305,7 @@ def fallback_result():
 
 # ─── MERGE TRANSLATIONS ────────────────────────────────────────
 def merge_translations(articles, ai_result):
-    """Gộp bản dịch AI vào từng article - robust, có fallback"""
+    """Gộp bản dịch AI vào từng article - đảm bảo 100% bài EN có title_vi"""
     arts_vi = ai_result.get("articles_vi", [])
 
     lookup = {}
@@ -314,34 +314,50 @@ def merge_translations(articles, ai_result):
         if idx is not None:
             lookup[int(idx)] = item
 
-    en_total = sum(1 for a in articles[:MAX_ARTICLES_FOR_AI] if a["lang"] == "en")
-    en_missing = 0
+    en_total = 0
+    en_translated = 0
+    en_fallback = 0
+    en_missing_details = []
 
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
-        vi = lookup.get(i, {})
-
         if a["lang"] == "en":
+            en_total += 1
+            vi = lookup.get(i, {})
+            
             t_vi = (vi.get("title_vi") or "").strip()
             s_vi = (vi.get("summary_vi") or "").strip()
 
-            if t_vi:
+            has_valid_translation = (
+                t_vi and 
+                t_vi != a["title"] and
+                len(t_vi) > 5
+            )
+
+            if has_valid_translation:
                 a["title_vi"] = t_vi
+                a["summary_vi"] = s_vi if s_vi else a["summary"]
+                en_translated += 1
             else:
                 a["title_vi"] = a["title"]
-                en_missing += 1
-
-            if s_vi:
-                a["summary_vi"] = s_vi
-            else:
                 a["summary_vi"] = a["summary"]
+                en_fallback += 1
+                en_missing_details.append({
+                    "index": i,
+                    "source": a["source"],
+                    "title": a["title"][:50]
+                })
         else:
-            a["title_vi"]   = a["title"]
+            a["title_vi"] = a["title"]
             a["summary_vi"] = a["summary"]
 
-    if en_missing > 0:
-        print(f"  ⚠️  {en_missing}/{en_total} bài EN thiếu bản dịch (dùng gốc)")
-    else:
-        print(f"  ✅ Dịch thành công {en_total} bài EN → VI")
+    print(f"  📊 Thống kê dịch EN→VI:")
+    print(f"     ✅ {en_translated}/{en_total} bài có bản dịch")
+    if en_fallback > 0:
+        print(f"     ⚠️  {en_fallback}/{en_total} bài dùng title gốc (AI không dịch)")
+        for item in en_missing_details[:5]:
+            print(f"        [{item['index']}] {item['source']}: {item['title']}")
+        if len(en_missing_details) > 5:
+            print(f"        ... và {len(en_missing_details) - 5} bài khác")
 
     return articles
 
@@ -356,9 +372,13 @@ def save_to_firebase(ref, articles, ai_result):
     new_with_vi = 0
     new_no_vi = 0
     
-    for a in articles:
+    # Lặp với index để lưu articleIndex
+    for idx, a in enumerate(articles, 1):
         t_vi = a.get("title_vi", "")
         s_vi = a.get("summary_vi", "")
+        
+        # Thêm articleIndex vào article
+        a["articleIndex"] = idx
         
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
@@ -371,6 +391,7 @@ def save_to_firebase(ref, articles, ai_result):
         else:
             ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(t_vi)
             ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(s_vi)
+            ref.child(f"articles/{TODAY}/{a['id']}/articleIndex").set(idx)
             upd_count += 1
     
     print(f"     📥 {new_count} bài mới (trong đó {new_with_vi} bài EN đã dịch, {new_no_vi} bài EN thiếu dịch)")
