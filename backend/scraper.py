@@ -33,7 +33,7 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI     = 40
+MAX_ARTICLES_FOR_AI     = 100  # ← ĐỔI TỪ 40 THÀNH 100
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -199,9 +199,9 @@ def process_with_ai(articles):
                 "model":       OPENROUTER_MODEL,
                 "messages":    [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens":  8000,
+                "max_tokens":  12000,  # tăng từ 8000 lên 12000 để chứa 100 bài
             },
-            timeout=180,
+            timeout=240,  # tăng timeout
         )
         resp.raise_for_status()
         text = resp.json()["choices"][0]["message"]["content"]
@@ -267,9 +267,9 @@ Bắt đầu JSON ngay:"""
                 "model":       OPENROUTER_MODEL,
                 "messages":    [{"role": "user", "content": retry_prompt}],
                 "temperature": 0.2,
-                "max_tokens":  4000,
+                "max_tokens":  6000,
             },
-            timeout=120,
+            timeout=180,
         )
         resp.raise_for_status()
         text = resp.json()["choices"][0]["message"]["content"]
@@ -353,17 +353,28 @@ def save_to_firebase(ref, articles, ai_result):
     existing  = ref.child(f"articles/{TODAY}").get() or {}
     new_count = 0
     upd_count = 0
+    new_with_vi = 0
+    new_no_vi = 0
+    
     for a in articles:
+        t_vi = a.get("title_vi", "")
+        s_vi = a.get("summary_vi", "")
+        
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
+            if a["lang"] == "en":
+                if t_vi and t_vi != a["title"]:
+                    new_with_vi += 1
+                else:
+                    new_no_vi += 1
         else:
-            t_vi = a.get("title_vi", "")
-            s_vi = a.get("summary_vi", "")
             ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(t_vi)
             ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(s_vi)
             upd_count += 1
-    print(f"     {new_count} bài mới, {upd_count} bài cập nhật dịch")
+    
+    print(f"     📥 {new_count} bài mới (trong đó {new_with_vi} bài EN đã dịch, {new_no_vi} bài EN thiếu dịch)")
+    print(f"     🔄 {upd_count} bài cũ đã cập nhật bản dịch")
 
     ref.child(f"clusters/{TODAY}").set(ai_result.get("clusters", []))
     ref.child(f"trends/{TODAY}").set(ai_result.get("trends", []))
