@@ -155,7 +155,7 @@ def process_with_ai(articles: list) -> dict:
                 "model": OPENROUTER_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens": 4000,
+                "max_tokens": 8000,
             },
             timeout=120,
         )
