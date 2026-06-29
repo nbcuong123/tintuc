@@ -604,7 +604,7 @@ function renderClusters(articles, clusters, filter) {
 
     const articlesHtml = relArts.map(a => `
       <div class="article-item">
-        <a class="article-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a>
+        <a class="article-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title_vi || a.title)}</a>
         <div class="article-meta">
           <span class="cat-badge cat-${a.cat}">${catLabel(a.cat)}</span>
           <span>${esc(a.source)}</span>
