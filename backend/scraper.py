@@ -86,6 +86,32 @@ def scrape_all_sources():
     return articles
 
 
+def balance_languages(articles):
+    """Trộn đều bài VI và EN để đảm bảo AI có cả 2 ngôn ngữ"""
+    vi_articles = [a for a in articles if a["lang"] == "vi"]
+    en_articles = [a for a in articles if a["lang"] == "en"]
+    
+    print(f"  → Balance: {len(vi_articles)} VI, {len(en_articles)} EN")
+    
+    # Trộn xen kẽ: 2 VI, 1 EN, lặp lại
+    balanced = []
+    vi_idx, en_idx = 0, 0
+    
+    while vi_idx < len(vi_articles) or en_idx < len(en_articles):
+        # Thêm 2 bài VI
+        for _ in range(2):
+            if vi_idx < len(vi_articles):
+                balanced.append(vi_articles[vi_idx])
+                vi_idx += 1
+        # Thêm 1 bài EN
+        if en_idx < len(en_articles):
+            balanced.append(en_articles[en_idx])
+            en_idx += 1
+    
+    print(f"  ✅ Đã trộn: {len(balanced)} bài (xen kẽ VI-EN)")
+    return balanced
+
+
 # ─── AI ───────────────────────────────────────────────────────
 def build_prompt(articles):
     """Prompt rõ ràng, bắt buộc AI trả về ĐỦ tất cả bài"""
@@ -365,6 +391,9 @@ def main():
     if not articles:
         print("❌ Không có bài nào, dừng.")
         return
+
+    print("\n2.5️⃣ Balance VI/EN...")
+    articles = balance_languages(articles)
 
     print("\n3️⃣  Xử lý AI + dịch EN→VI...")
     ai_result = process_with_ai(articles)
