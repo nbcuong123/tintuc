@@ -1,24 +1,18 @@
 """
-News Digest Scraper + OpenRouter AI Processor
-Chạy qua GitHub Actions hoặc thủ công
+News Digest Scraper + OpenRouter AI Processor (với dịch EN→VI)
 """
 
-import os
-import json
-import hashlib
-import re
-import feedparser
-import requests
+import os, json, hashlib, re
+import feedparser, requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import firebase_admin
 from firebase_admin import credentials, db
 
-# ─── CONFIG ────────────────────────────────────────────────────────────────────
-
+# ─── CONFIG ───────────────────────────────────────────────────
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
-OPENROUTER_MODEL = "openrouter/auto" # free model trên OpenRouter
+OPENROUTER_MODEL   = "openrouter/auto"
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 TODAY = datetime.now(VN_TZ).strftime("%Y-%m-%d")
@@ -42,8 +36,7 @@ MAX_ARTICLES_PER_SOURCE = 10
 MAX_ARTICLES_FOR_AI     = 40
 
 
-# ─── FIREBASE INIT ─────────────────────────────────────────────────────────────
-
+# ─── FIREBASE ─────────────────────────────────────────────────
 def init_firebase():
     sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not sa_json:
@@ -55,11 +48,9 @@ def init_firebase():
     return db.reference()
 
 
-# ─── SCRAPE RSS ────────────────────────────────────────────────────────────────
-
-def article_id(url: str) -> str:
+# ─── SCRAPE ───────────────────────────────────────────────────
+def article_id(url):
     return hashlib.md5(url.encode()).hexdigest()[:12]
-
 
 def scrape_all_sources():
     articles = []
@@ -71,20 +62,21 @@ def scrape_all_sources():
             for entry in feed.entries[:MAX_ARTICLES_PER_SOURCE]:
                 title   = entry.get("title", "").strip()
                 link    = entry.get("link", "").strip()
-                summary = entry.get("summary", entry.get("description", "")).strip()
-                summary = re.sub(r"<[^>]+>", "", summary)[:500]
+                summary = re.sub(r"<[^>]+>", "", entry.get("summary", entry.get("description", "")).strip())[:500]
                 if not title or not link:
                     continue
                 articles.append({
-                    "id":      article_id(link),
-                    "title":   title,
-                    "summary": summary,
-                    "url":     link,
-                    "source":  source["name"],
-                    "lang":    source["lang"],
-                    "cat":     source["cat"],
-                    "pubDate": entry.get("published", ""),
-                    "date":    TODAY,
+                    "id":       article_id(link),
+                    "title":    title,
+                    "title_vi": "",      # sẽ được điền sau khi AI dịch
+                    "summary":  summary,
+                    "summary_vi": "",    # sẽ được điền sau khi AI dịch
+                    "url":      link,
+                    "source":   source["name"],
+                    "lang":     source["lang"],
+                    "cat":      source["cat"],
+                    "pubDate":  entry.get("published", ""),
+                    "date":     TODAY,
                 })
                 count += 1
             print(f"     {count} bài")
@@ -94,58 +86,63 @@ def scrape_all_sources():
     return articles
 
 
-# ─── OPENROUTER AI ─────────────────────────────────────────────────────────────
-
-def build_prompt(articles: list) -> str:
+# ─── AI ───────────────────────────────────────────────────────
+def build_prompt(articles):
     articles_text = ""
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
-        articles_text += f"\n[{i}] [{a['source']}] [{a['cat'].upper()}]\nTiêu đề: {a['title']}\nTóm tắt: {a['summary'][:200]}\n---"
+        lang_note = " [EN→VI]" if a.get("lang") == "en" else ""
+        articles_text += f"\n[{i}]{lang_note} [{a['source']}] [{a['cat'].upper()}]\nTiêu đề: {a['title']}\nTóm tắt: {a['summary'][:200]}\n---"
 
-    return f"""Bạn là biên tập viên tin tức cao cấp. Phân tích {len(articles[:MAX_ARTICLES_FOR_AI])} bài báo dưới đây (bài tiếng Anh hãy dịch tiêu đề và tóm tắt sang tiếng Việt) và trả về JSON thuần túy (KHÔNG có markdown, KHÔNG có backtick, KHÔNG có text ngoài JSON):
+    n = len(articles[:MAX_ARTICLES_FOR_AI])
+    return f"""Bạn là biên tập viên tin tức cao cấp, thành thạo dịch Anh-Việt. Phân tích {n} bài báo và trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick, KHÔNG text ngoài JSON).
+
+Bài đánh dấu [EN->VI] là bài tiếng Anh — dịch title_vi và summary_vi sang tiếng Việt tự nhiên.
 
 {{
+  "articles_vi": [
+    {{
+      "index": 1,
+      "title_vi": "Tiêu đề tiếng Việt",
+      "summary_vi": "Tóm tắt tiếng Việt 1-2 câu"
+    }}
+  ],
   "clusters": [
     {{
-      "topic": "Tên chủ đề ngắn gọn",
-      "summary": "Tóm tắt 2-3 câu về chủ đề này bằng tiếng Việt",
+      "topic": "Tên chủ đề ngắn gọn tiếng Việt",
+      "summary": "Tóm tắt 2-3 câu tiếng Việt",
       "articles": [1, 3, 5],
       "importance": 8
     }}
   ],
-  "translations": {{
-    "1": {{"title": "Tiêu đề đã dịch sang tiếng Việt", "summary": "Tóm tắt đã dịch"}},
-    "2": {{"title": "...", "summary": "..."}}
-  }},
   "trends": [
     {{
       "rank": 1,
-      "topic": "Tên xu hướng",
-      "reason": "Lý do 1 câu tại sao đây là xu hướng nổi bật",
+      "topic": "Tên xu hướng tiếng Việt",
+      "reason": "Lý do 1 câu",
       "category": "economy",
       "score": 95
     }}
   ],
   "digest": {{
-    "headline": "Tiêu đề tổng kết ngày hôm nay (1 câu ấn tượng)",
-    "overview": "Nhận định tổng quan về ngày hôm nay trong 3-5 câu tiếng Việt",
-    "key_points": ["Điểm nổi bật 1", "Điểm nổi bật 2", "Điểm nổi bật 3", "Điểm nổi bật 4", "Điểm nổi bật 5"]
+    "headline": "Tiêu đề tổng kết ngày (1 câu ấn tượng)",
+    "overview": "Nhận định tổng quan 3-5 câu tiếng Việt",
+    "key_points": ["Điểm 1", "Điểm 2", "Điểm 3", "Điểm 4", "Điểm 5"]
   }}
 }}
 
 Yêu cầu:
-- clusters: nhóm các bài cùng chủ đề, importance từ 1-10, tạo 5-10 clusters
-- trends: top 5 xu hướng nổi bật nhất, score từ 1-100, category chỉ dùng: economy, world, vn
-- digest: tóm tắt tổng thể ngày hôm nay
-- Tất cả text bằng tiếng Việt trừ tên riêng
+- articles_vi: dịch/giữ TẤT CẢ {n} bài, index khớp số thứ tự [N]
+- clusters: 5-10 nhóm chủ đề, importance 1-10
+- trends: top 5, score 1-100, category chỉ dùng: economy/world/vn
+- Tất cả text tiếng Việt tự nhiên, tên riêng giữ nguyên
 
 Danh sách bài báo:
 {articles_text}"""
 
 
-def process_with_ai(articles: list) -> dict:
+def process_with_ai(articles):
     print("  → Gọi OpenRouter AI...")
     prompt = build_prompt(articles)
-
     try:
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -156,46 +153,59 @@ def process_with_ai(articles: list) -> dict:
                 "X-Title":       "Tin247 News Digest",
             },
             json={
-                "model": OPENROUTER_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "model":       OPENROUTER_MODEL,
+                "messages":    [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens": 8000,
+                "max_tokens":  8000,
             },
             timeout=120,
         )
         resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"].strip()
-
-        # Clean backticks nếu có
+        text = resp.json()["choices"][0]["message"]["content"].strip()
         text = re.sub(r"^```json\s*", "", text)
         text = re.sub(r"^```\s*",     "", text)
         text = re.sub(r"\s*```$",     "", text)
 
-        result = json.loads(text)
+        result   = json.loads(text)
         clusters = result.get("clusters", [])
         trends   = result.get("trends", [])
-        print(f"  ✅ AI xử lý xong: {len(clusters)} clusters, {len(trends)} trends")
+        arts_vi  = result.get("articles_vi", [])
+        print(f"  ✅ AI xử lý xong: {len(clusters)} clusters, {len(trends)} trends, {len(arts_vi)} bài dịch")
         return result
 
     except Exception as e:
         print(f"  ❌ AI lỗi: {e}")
         if 'resp' in dir() and hasattr(resp, 'text'):
             print(f"  Response: {resp.text[:500]}")
-        return {
-            "clusters": [],
-            "trends":   [],
-            "digest": {
-                "headline":   "Tổng hợp tin ngày " + TODAY,
-                "overview":   "Không thể tạo tóm tắt tự động.",
-                "key_points": []
-            }
-        }
+        return {"clusters": [], "trends": [], "articles_vi": [], "digest": {
+            "headline": "Tổng hợp tin ngày " + TODAY,
+            "overview": "Không thể tạo tóm tắt tự động.",
+            "key_points": []
+        }}
 
 
-# ─── SAVE TO FIREBASE ──────────────────────────────────────────────────────────
+# ─── MERGE TRANSLATIONS ────────────────────────────────────────
+def merge_translations(articles, ai_result):
+    """Gộp bản dịch AI vào từng article"""
+    arts_vi = ai_result.get("articles_vi", [])
+    # Build lookup: index → {title_vi, summary_vi}
+    lookup = {item["index"]: item for item in arts_vi if "index" in item}
 
-def save_to_firebase(ref, articles: list, ai_result: dict):
+    for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
+        vi = lookup.get(i, {})
+        if a["lang"] == "en":
+            # Bài tiếng Anh: dùng bản dịch AI
+            a["title_vi"]   = vi.get("title_vi", a["title"])
+            a["summary_vi"] = vi.get("summary_vi", a["summary"])
+        else:
+            # Bài tiếng Việt: giữ nguyên
+            a["title_vi"]   = a["title"]
+            a["summary_vi"] = a["summary"]
+    return articles
+
+
+# ─── SAVE TO FIREBASE ─────────────────────────────────────────
+def save_to_firebase(ref, articles, ai_result):
     print("  → Lưu lên Firebase...")
 
     existing  = ref.child(f"articles/{TODAY}").get() or {}
@@ -220,12 +230,9 @@ def save_to_firebase(ref, articles: list, ai_result: dict):
     print("  ✅ Firebase xong")
 
 
-# ─── MAIN ──────────────────────────────────────────────────────────────────────
-
+# ─── MAIN ─────────────────────────────────────────────────────
 def main():
-    print(f"\n{'='*50}")
-    print(f"📰 News Digest - {TODAY}")
-    print(f"{'='*50}\n")
+    print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
     print("1️⃣  Init Firebase...")
     ref = init_firebase()
@@ -236,14 +243,16 @@ def main():
         print("❌ Không có bài nào, dừng.")
         return
 
-    print("\n3️⃣  Xử lý AI...")
+    print("\n3️⃣  Xử lý AI + dịch EN→VI...")
     ai_result = process_with_ai(articles)
 
-    print("\n4️⃣  Lưu Firebase...")
+    print("\n4️⃣  Merge bản dịch...")
+    articles = merge_translations(articles, ai_result)
+
+    print("\n5️⃣  Lưu Firebase...")
     save_to_firebase(ref, articles, ai_result)
 
-    print(f"\n✅ Hoàn tất! {len(articles)} bài, {len(ai_result.get('clusters', []))} clusters, {len(ai_result.get('trends', []))} trends")
-
+    print(f"\n✅ Hoàn tất! {len(articles)} bài, {len(ai_result.get('clusters',[]))} clusters, {len(ai_result.get('trends',[]))} trends")
 
 if __name__ == "__main__":
     main()
