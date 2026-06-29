@@ -625,7 +625,7 @@ async function loadYoutubeTrends(date) {
   try {
     // ✅ SỬA: Đọc từ youtube_trending (snake_case) thay vì youtubeTrends
     // Nếu Firebase dùng tên khác, sửa lại cho đúng
-    const snap = await get(child(dbRef, `youtube_trending/${date}`));
+    const snap = await get(child(dbRef, `youtube_trends/${date}`));
     if (!snap.exists()) {
       el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
         <div class="empty-icon">▶️</div>
