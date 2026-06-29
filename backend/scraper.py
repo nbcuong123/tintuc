@@ -223,9 +223,13 @@ def save_to_firebase(ref, articles, ai_result):
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
         else:
-            # Luôn update title_vi/summary_vi (có thể bài cũ chưa có)
-            ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(a.get("title_vi", ""))
-            ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(a.get("summary_vi", ""))
+            # Luôn update title_vi/summary_vi
+            t_vi = a.get("title_vi", "")
+            s_vi = a.get("summary_vi", "")
+            if a.get("lang") == "en" and upd_count < 3:
+                print(f"  DEBUG update [{a['id']}] lang=en title_vi={repr(t_vi[:40])}")
+            ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(t_vi)
+            ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(s_vi)
             upd_count += 1
     print(f"     {new_count} bài mới, {upd_count} bài cập nhật dịch")
 
