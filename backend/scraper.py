@@ -1,93 +1,80 @@
 """
-News Digest Scraper + Gemini AI Processor
+News Digest Scraper + OpenRouter AI Processor
 Chạy qua GitHub Actions hoặc thủ công
 """
 
 import os
 import json
 import hashlib
+import re
 import feedparser
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
-import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, db
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
+OPENROUTER_MODEL   = "google/gemini-2.0-flash-exp:free"  # free model trên OpenRouter
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 TODAY = datetime.now(VN_TZ).strftime("%Y-%m-%d")
 
 RSS_SOURCES = [
-    # Việt Nam - Tổng hợp
-    {"name": "VnExpress",       "lang": "vi", "cat": "vn",      "url": "https://vnexpress.net/rss/tin-moi-nhat.rss"},
+    {"name": "VnExpress",        "lang": "vi", "cat": "vn",      "url": "https://vnexpress.net/rss/tin-moi-nhat.rss"},
     {"name": "VnExpress Kinh tế","lang": "vi", "cat": "economy", "url": "https://vnexpress.net/rss/kinh-doanh.rss"},
-    {"name": "Tuổi Trẻ",        "lang": "vi", "cat": "vn",      "url": "https://tuoitre.vn/rss/tin-moi-nhat.rss"},
-    {"name": "Tuổi Trẻ Kinh tế","lang": "vi", "cat": "economy", "url": "https://tuoitre.vn/rss/kinh-doanh.rss"},
-    {"name": "Thanh Niên",      "lang": "vi", "cat": "vn",      "url": "https://thanhnien.vn/rss/home.rss"},
-    {"name": "Dân Trí",         "lang": "vi", "cat": "vn",      "url": "https://dantri.com.vn/rss/home.rss"},
-    {"name": "CafeF",           "lang": "vi", "cat": "economy", "url": "https://cafef.vn/rss/thi-truong-chung-khoan.rss"},
-    # Quốc tế
-    {"name": "Reuters World",   "lang": "en", "cat": "world",   "url": "https://feeds.reuters.com/reuters/topNews"},
-    {"name": "Reuters Business","lang": "en", "cat": "economy", "url": "https://feeds.reuters.com/reuters/businessNews"},
-    {"name": "BBC World",       "lang": "en", "cat": "world",   "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
-    {"name": "BBC Business",    "lang": "en", "cat": "economy", "url": "https://feeds.bbci.co.uk/news/business/rss.xml"},
-    {"name": "CNBC Economy",    "lang": "en", "cat": "economy", "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
+    {"name": "Tuổi Trẻ",         "lang": "vi", "cat": "vn",      "url": "https://tuoitre.vn/rss/tin-moi-nhat.rss"},
+    {"name": "Tuổi Trẻ Kinh tế", "lang": "vi", "cat": "economy", "url": "https://tuoitre.vn/rss/kinh-doanh.rss"},
+    {"name": "Thanh Niên",       "lang": "vi", "cat": "vn",      "url": "https://thanhnien.vn/rss/home.rss"},
+    {"name": "Dân Trí",          "lang": "vi", "cat": "vn",      "url": "https://dantri.com.vn/rss/home.rss"},
+    {"name": "CafeF",            "lang": "vi", "cat": "economy", "url": "https://cafef.vn/rss/thi-truong-chung-khoan.rss"},
+    {"name": "Reuters World",    "lang": "en", "cat": "world",   "url": "https://feeds.reuters.com/reuters/topNews"},
+    {"name": "Reuters Business", "lang": "en", "cat": "economy", "url": "https://feeds.reuters.com/reuters/businessNews"},
+    {"name": "BBC World",        "lang": "en", "cat": "world",   "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
+    {"name": "BBC Business",     "lang": "en", "cat": "economy", "url": "https://feeds.bbci.co.uk/news/business/rss.xml"},
+    {"name": "CNBC Economy",     "lang": "en", "cat": "economy", "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI = 40  # giới hạn gửi cho Gemini mỗi lần
+MAX_ARTICLES_FOR_AI     = 40
 
 
 # ─── FIREBASE INIT ─────────────────────────────────────────────────────────────
 
 def init_firebase():
-    """Init Firebase từ service account JSON trong env var"""
     sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not sa_json:
         raise ValueError("Thiếu FIREBASE_SERVICE_ACCOUNT env var")
-
     sa_dict = json.loads(sa_json)
-
     if not firebase_admin._apps:
         cred = credentials.Certificate(sa_dict)
         firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
-
     return db.reference()
 
 
 # ─── SCRAPE RSS ────────────────────────────────────────────────────────────────
 
 def article_id(url: str) -> str:
-    """Tạo ID ngắn từ URL"""
     return hashlib.md5(url.encode()).hexdigest()[:12]
 
 
 def scrape_all_sources():
-    """Scrape tất cả RSS sources, trả về list articles"""
     articles = []
-
     for source in RSS_SOURCES:
         print(f"  → Scraping {source['name']}...")
         try:
             feed = feedparser.parse(source["url"])
             count = 0
             for entry in feed.entries[:MAX_ARTICLES_PER_SOURCE]:
-                title = entry.get("title", "").strip()
-                link  = entry.get("link", "").strip()
+                title   = entry.get("title", "").strip()
+                link    = entry.get("link", "").strip()
                 summary = entry.get("summary", entry.get("description", "")).strip()
-                # Xóa HTML tags đơn giản
-                import re
                 summary = re.sub(r"<[^>]+>", "", summary)[:500]
-
                 if not title or not link:
                     continue
-
-                pub_date = entry.get("published", "")
                 articles.append({
                     "id":      article_id(link),
                     "title":   title,
@@ -96,36 +83,25 @@ def scrape_all_sources():
                     "source":  source["name"],
                     "lang":    source["lang"],
                     "cat":     source["cat"],
-                    "pubDate": pub_date,
+                    "pubDate": entry.get("published", ""),
                     "date":    TODAY,
                 })
                 count += 1
             print(f"     {count} bài")
         except Exception as e:
             print(f"     ❌ Lỗi: {e}")
-
     print(f"  Tổng: {len(articles)} bài")
     return articles
 
 
-# ─── GEMINI AI ─────────────────────────────────────────────────────────────────
-
-def init_gemini():
-    genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel("models/gemini-1.5-flash-latest")
-
+# ─── OPENROUTER AI ─────────────────────────────────────────────────────────────
 
 def build_prompt(articles: list) -> str:
-    """Tạo prompt gửi cho Gemini"""
     articles_text = ""
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
-        articles_text += f"""
-[{i}] [{a['source']}] [{a['cat'].upper()}]
-Tiêu đề: {a['title']}
-Tóm tắt: {a['summary'][:200]}
----"""
+        articles_text += f"\n[{i}] [{a['source']}] [{a['cat'].upper()}]\nTiêu đề: {a['title']}\nTóm tắt: {a['summary'][:200]}\n---"
 
-    return f"""Bạn là biên tập viên tin tức cao cấp. Phân tích {len(articles[:MAX_ARTICLES_FOR_AI])} bài báo dưới đây và trả về JSON (KHÔNG có markdown, KHÔNG có backtick):
+    return f"""Bạn là biên tập viên tin tức cao cấp. Phân tích {len(articles[:MAX_ARTICLES_FOR_AI])} bài báo dưới đây và trả về JSON thuần túy (KHÔNG có markdown, KHÔNG có backtick, KHÔNG có text ngoài JSON):
 
 {{
   "clusters": [
@@ -141,7 +117,7 @@ Tóm tắt: {a['summary'][:200]}
       "rank": 1,
       "topic": "Tên xu hướng",
       "reason": "Lý do 1 câu tại sao đây là xu hướng nổi bật",
-      "category": "economy|world|vn",
+      "category": "economy",
       "score": 95
     }}
   ],
@@ -153,42 +129,61 @@ Tóm tắt: {a['summary'][:200]}
 }}
 
 Yêu cầu:
-- clusters: nhóm các bài cùng chủ đề, importance từ 1-10
-- trends: top 5 xu hướng nổi bật nhất ngày hôm nay, score từ 1-100
-- digest: bản tóm tắt tổng thể ngày hôm nay
+- clusters: nhóm các bài cùng chủ đề, importance từ 1-10, tạo 5-10 clusters
+- trends: top 5 xu hướng nổi bật nhất, score từ 1-100, category chỉ dùng: economy, world, vn
+- digest: tóm tắt tổng thể ngày hôm nay
 - Tất cả text bằng tiếng Việt trừ tên riêng
 
 Danh sách bài báo:
 {articles_text}"""
 
 
-def process_with_ai(model, articles: list) -> dict:
-    """Gọi Gemini, parse kết quả"""
-    print("  → Gọi Gemini AI...")
+def process_with_ai(articles: list) -> dict:
+    print("  → Gọi OpenRouter AI...")
     prompt = build_prompt(articles)
 
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type":  "application/json",
+                "HTTP-Referer":  "https://nbcuong123.github.io/tintuc/",
+                "X-Title":       "Tin247 News Digest",
+            },
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+                "max_tokens": 4000,
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"].strip()
 
-        # Clean nếu có backtick
-        import re
+        # Clean backticks nếu có
         text = re.sub(r"^```json\s*", "", text)
         text = re.sub(r"^```\s*",     "", text)
         text = re.sub(r"\s*```$",     "", text)
 
         result = json.loads(text)
-        print("  ✅ AI xử lý xong")
+        clusters = result.get("clusters", [])
+        trends   = result.get("trends", [])
+        print(f"  ✅ AI xử lý xong: {len(clusters)} clusters, {len(trends)} trends")
         return result
 
     except Exception as e:
         print(f"  ❌ AI lỗi: {e}")
+        if 'resp' in dir() and hasattr(resp, 'text'):
+            print(f"  Response: {resp.text[:500]}")
         return {
             "clusters": [],
-            "trends": [],
+            "trends":   [],
             "digest": {
-                "headline": "Tổng hợp tin ngày " + TODAY,
-                "overview": "Không thể tạo tóm tắt tự động.",
+                "headline":   "Tổng hợp tin ngày " + TODAY,
+                "overview":   "Không thể tạo tóm tắt tự động.",
                 "key_points": []
             }
         }
@@ -197,36 +192,27 @@ def process_with_ai(model, articles: list) -> dict:
 # ─── SAVE TO FIREBASE ──────────────────────────────────────────────────────────
 
 def save_to_firebase(ref, articles: list, ai_result: dict):
-    """Lưu tất cả lên Firebase"""
     print("  → Lưu lên Firebase...")
 
-    # 1. Lưu từng bài (chỉ lưu bài chưa có)
-    existing = ref.child(f"articles/{TODAY}").get() or {}
+    existing  = ref.child(f"articles/{TODAY}").get() or {}
     new_count = 0
     for a in articles:
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
-
     print(f"     {new_count} bài mới")
 
-    # 2. Lưu clusters
     ref.child(f"clusters/{TODAY}").set(ai_result.get("clusters", []))
-
-    # 3. Lưu trends
     ref.child(f"trends/{TODAY}").set(ai_result.get("trends", []))
 
-    # 4. Lưu daily digest
     digest = ai_result.get("digest", {})
-    digest["date"] = TODAY
-    digest["updatedAt"] = datetime.now(VN_TZ).isoformat()
+    digest["date"]          = TODAY
+    digest["updatedAt"]     = datetime.now(VN_TZ).isoformat()
     digest["totalArticles"] = len(articles)
     ref.child(f"digest/{TODAY}").set(digest)
 
-    # 5. Cập nhật meta (ngày mới nhất)
     ref.child("meta/lastUpdated").set(datetime.now(VN_TZ).isoformat())
     ref.child("meta/lastDate").set(TODAY)
-
     print("  ✅ Firebase xong")
 
 
@@ -242,14 +228,12 @@ def main():
 
     print("\n2️⃣  Scraping RSS...")
     articles = scrape_all_sources()
-
     if not articles:
         print("❌ Không có bài nào, dừng.")
         return
 
     print("\n3️⃣  Xử lý AI...")
-    model = init_gemini()
-    ai_result = process_with_ai(model, articles)
+    ai_result = process_with_ai(articles)
 
     print("\n4️⃣  Lưu Firebase...")
     save_to_firebase(ref, articles, ai_result)
