@@ -101,7 +101,7 @@ def build_prompt(articles: list) -> str:
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
         articles_text += f"\n[{i}] [{a['source']}] [{a['cat'].upper()}]\nTiêu đề: {a['title']}\nTóm tắt: {a['summary'][:200]}\n---"
 
-    return f"""Bạn là biên tập viên tin tức cao cấp. Phân tích {len(articles[:MAX_ARTICLES_FOR_AI])} bài báo dưới đây và trả về JSON thuần túy (KHÔNG có markdown, KHÔNG có backtick, KHÔNG có text ngoài JSON):
+    return f"""Bạn là biên tập viên tin tức cao cấp. Phân tích {len(articles[:MAX_ARTICLES_FOR_AI])} bài báo dưới đây (bài tiếng Anh hãy dịch tiêu đề và tóm tắt sang tiếng Việt) và trả về JSON thuần túy (KHÔNG có markdown, KHÔNG có backtick, KHÔNG có text ngoài JSON):
 
 {{
   "clusters": [
@@ -112,6 +112,10 @@ def build_prompt(articles: list) -> str:
       "importance": 8
     }}
   ],
+  "translations": {{
+    "1": {{"title": "Tiêu đề đã dịch sang tiếng Việt", "summary": "Tóm tắt đã dịch"}},
+    "2": {{"title": "...", "summary": "..."}}
+  }},
   "trends": [
     {{
       "rank": 1,
