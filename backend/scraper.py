@@ -199,7 +199,8 @@ def merge_translations(articles, ai_result):
             a["title_vi"]   = t if t else a["title"]
             a["summary_vi"] = s if s else a["summary"]
             if not t:
-                print(f"     ⚠️  Thiếu dịch bài [{i}]: {a[\'title\'][:50]}")
+                title_short = a['title'][:50]
+                print(f"     ⚠️  Thiếu dịch bài [{i}]: {title_short}")
         else:
             a["title_vi"]   = a["title"]
             a["summary_vi"] = a["summary"]
