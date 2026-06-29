@@ -37,6 +37,7 @@
     min-height: 100vh;
   }
 
+  /* ── TOP BAR ── */
   .topbar {
     position: sticky; top: 0; z-index: 100;
     background: rgba(13,15,20,0.92);
@@ -54,8 +55,13 @@
     white-space: nowrap;
   }
   .logo span { color: var(--accent); }
-  .topbar-meta { flex: 1; font-size: 12px; color: var(--text3); }
-  .date-nav { display: flex; align-items: center; gap: 6px; }
+  .topbar-meta {
+    flex: 1;
+    font-size: 12px; color: var(--text3);
+  }
+  .date-nav {
+    display: flex; align-items: center; gap: 6px;
+  }
   .date-nav button {
     background: var(--bg3); border: 1px solid var(--border);
     color: var(--text2); cursor: pointer;
@@ -68,7 +74,8 @@
   #datePicker {
     background: var(--bg3); border: 1px solid var(--border);
     color: var(--text); padding: 4px 10px; border-radius: 6px;
-    font-size: 12px; cursor: pointer; font-family: inherit;
+    font-size: 12px; cursor: pointer;
+    font-family: inherit;
   }
   .btn-refresh {
     background: var(--accent); color: #fff; border: none;
@@ -82,8 +89,10 @@
   .spinner { animation: spin 0.8s linear infinite; display: inline-block; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── LAYOUT ── */
   .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
 
+  /* ── DIGEST BANNER ── */
   .digest-banner {
     background: linear-gradient(135deg, var(--bg2) 0%, #1a1e35 100%);
     border: 1px solid var(--border);
@@ -99,10 +108,16 @@
   .digest-headline {
     font-family: 'Playfair Display', serif;
     font-size: 22px; font-weight: 700;
-    color: var(--text); line-height: 1.3; margin-bottom: 10px;
+    color: var(--text); line-height: 1.3;
+    margin-bottom: 10px;
   }
-  .digest-overview { color: var(--text2); font-size: 13px; line-height: 1.7; margin-bottom: 14px; }
-  .digest-points { display: flex; flex-wrap: wrap; gap: 8px; }
+  .digest-overview {
+    color: var(--text2); font-size: 13px; line-height: 1.7;
+    margin-bottom: 14px;
+  }
+  .digest-points {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
   .digest-point {
     background: var(--bg3); border: 1px solid var(--border);
     border-radius: 20px; padding: 4px 12px;
@@ -111,6 +126,7 @@
   }
   .digest-point::before { content: "•"; color: var(--accent); font-size: 16px; }
 
+  /* ── GRID ── */
   .main-grid {
     display: grid;
     grid-template-columns: 260px 1fr;
@@ -118,6 +134,7 @@
     align-items: start;
   }
 
+  /* ── SIDEBAR: TRENDS ── */
   .sidebar { display: flex; flex-direction: column; gap: 16px; }
   .card {
     background: var(--bg2); border: 1px solid var(--border);
@@ -143,7 +160,8 @@
   .trend-rank {
     font-family: 'Playfair Display', serif;
     font-size: 20px; font-weight: 900;
-    color: var(--border); min-width: 28px; line-height: 1; margin-top: 2px;
+    color: var(--border); min-width: 28px; line-height: 1;
+    margin-top: 2px;
   }
   .trend-rank.top1 { color: var(--accent2); }
   .trend-rank.top2 { color: var(--text3); }
@@ -151,12 +169,18 @@
   .trend-info { flex: 1; }
   .trend-topic { font-size: 13px; font-weight: 600; color: var(--text); }
   .trend-reason { font-size: 11px; color: var(--text3); margin-top: 2px; line-height: 1.4; }
-  .trend-bar { height: 2px; background: var(--border); border-radius: 2px; margin-top: 6px; }
+  .trend-bar {
+    height: 2px; background: var(--border); border-radius: 2px;
+    margin-top: 6px;
+  }
   .trend-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
 
+  /* ── CLUSTERS / MAIN CONTENT ── */
   .content-area { display: flex; flex-direction: column; gap: 16px; }
 
-  .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-bar {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
   .filter-btn {
     background: var(--bg2); border: 1px solid var(--border);
     color: var(--text2); padding: 5px 14px; border-radius: 20px;
@@ -170,6 +194,7 @@
   .filter-btn.cat-eco.active   { background: var(--cat-eco);   border-color: var(--cat-eco);   color: #000; }
   .filter-btn.cat-vn.active    { background: var(--cat-vn);    border-color: var(--cat-vn); }
 
+  /* Cluster card */
   .cluster-card {
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius); overflow: hidden;
@@ -188,8 +213,14 @@
     font-size: 12px; font-weight: 700; color: var(--accent2);
     flex-shrink: 0; margin-top: 2px;
   }
-  .cluster-title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
-  .cluster-summary { font-size: 12px; color: var(--text2); margin-top: 4px; line-height: 1.6; }
+  .cluster-title {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    line-height: 1.3;
+  }
+  .cluster-summary {
+    font-size: 12px; color: var(--text2); margin-top: 4px;
+    line-height: 1.6;
+  }
   .cluster-toggle {
     margin-left: auto; color: var(--text3); font-size: 18px;
     flex-shrink: 0; transition: var(--transition);
@@ -212,7 +243,10 @@
     transition: var(--transition);
   }
   .article-title:hover { color: var(--accent); }
-  .article-meta { display: flex; gap: 10px; align-items: center; font-size: 11px; color: var(--text3); }
+  .article-meta {
+    display: flex; gap: 10px; align-items: center;
+    font-size: 11px; color: var(--text3);
+  }
   .cat-badge {
     display: inline-block; padding: 1px 7px; border-radius: 10px;
     font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -222,17 +256,24 @@
   .cat-world { background: rgba(160,79,247,0.15); color: var(--cat-world); }
   .cat-economy { background: rgba(247,169,79,0.15); color: var(--cat-eco); }
 
-  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 4px; }
+  /* ── STATS ROW ── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 4px;
+  }
   .stat-card {
     background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px; text-align: center;
+    border-radius: var(--radius); padding: 14px;
+    text-align: center;
   }
   .stat-num {
     font-family: 'Playfair Display', serif;
-    font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1;
+    font-size: 28px; font-weight: 700; color: var(--accent);
+    line-height: 1;
   }
   .stat-label { font-size: 11px; color: var(--text3); margin-top: 4px; }
 
+  /* ── SHARE LINK ── */
   .share-box {
     display: flex; gap: 8px; align-items: center;
     background: var(--bg3); border: 1px solid var(--border);
@@ -252,6 +293,7 @@
   .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
   .btn-copy.copied { background: var(--accent3); color: #000; border-color: var(--accent3); }
 
+  /* ── LOADING / EMPTY ── */
   .loading-state {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; padding: 60px 20px; gap: 12px;
@@ -262,10 +304,13 @@
     border: 3px solid var(--border); border-top-color: var(--accent);
     animation: spin 0.8s linear infinite;
   }
-  .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text3);
+  }
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
   .empty-title { font-size: 16px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
 
+  /* ── TOAST ── */
   .toast {
     position: fixed; bottom: 24px; right: 24px; z-index: 9999;
     background: var(--bg3); border: 1px solid var(--border);
@@ -279,6 +324,7 @@
   .toast.success { border-left: 3px solid var(--accent3); }
   .toast.error   { border-left: 3px solid var(--danger); }
 
+  /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
     .main-grid { grid-template-columns: 1fr; }
     .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -288,67 +334,74 @@
     .container { padding: 12px; }
   }
 
+
   /* ── GOOGLE TRENDS ── */
+  .gtrend-list { display: flex; flex-direction: column; gap: 2px; }
   .gtrend-item {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 8px; border-radius: 8px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px;
     transition: var(--transition); cursor: pointer;
+    text-decoration: none;
   }
   .gtrend-item:hover { background: var(--bg3); }
   .gtrend-rank {
-    font-family: 'Playfair Display', serif;
-    font-size: 18px; font-weight: 900; color: var(--border);
-    min-width: 24px; line-height: 1; margin-top: 2px;
+    font-size: 11px; font-weight: 700; color: var(--text3);
+    min-width: 16px; text-align: center; flex-shrink: 0;
   }
-  .gtrend-rank.top3 { color: var(--accent2); }
-  .gtrend-keyword { font-size: 13px; font-weight: 600; color: var(--text); }
-  .gtrend-traffic { font-size: 11px; color: var(--accent3); margin-top: 2px; }
-  .gtrend-news { font-size: 11px; color: var(--text3); margin-top: 3px; }
-  .gtrend-news a { color: var(--text3); text-decoration: none; }
-  .gtrend-news a:hover { color: var(--accent); }
+  .gtrend-rank.hot { color: var(--accent2); }
+  .gtrend-keyword {
+    font-size: 13px; font-weight: 500; color: var(--text);
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .gtrend-traffic {
+    font-size: 10px; color: var(--accent3); font-weight: 600;
+    background: rgba(79,247,160,0.1); padding: 1px 6px;
+    border-radius: 10px; flex-shrink: 0; white-space: nowrap;
+  }
 
   /* ── YOUTUBE TRENDING ── */
-  .yt-grid { display: flex; flex-direction: column; gap: 10px; }
+  .yt-list { display: flex; flex-direction: column; gap: 2px; }
   .yt-item {
-    display: flex; gap: 10px; align-items: flex-start;
-    padding: 8px; border-radius: 8px;
+    display: flex; gap: 8px; align-items: center;
+    padding: 5px 8px; border-radius: 6px;
     transition: var(--transition); text-decoration: none;
   }
   .yt-item:hover { background: var(--bg3); }
-  .yt-thumb {
-    width: 80px; height: 45px; object-fit: cover;
-    border-radius: 6px; flex-shrink: 0; background: var(--bg3);
-  }
   .yt-rank {
-    font-family: 'Playfair Display', serif;
-    font-size: 16px; font-weight: 900; color: var(--border);
-    min-width: 20px; text-align: center; margin-top: 4px; flex-shrink: 0;
+    font-size: 11px; font-weight: 700; color: var(--text3);
+    min-width: 16px; text-align: center; flex-shrink: 0;
   }
-  .yt-rank.top3 { color: #ff4444; }
+  .yt-rank.hot { color: #ff4444; }
+  .yt-thumb {
+    width: 56px; height: 32px; object-fit: cover;
+    border-radius: 4px; flex-shrink: 0; background: var(--bg3);
+  }
   .yt-info { flex: 1; min-width: 0; }
   .yt-title {
-    font-size: 12px; font-weight: 600; color: var(--text);
-    line-height: 1.4; display: -webkit-box;
+    font-size: 12px; font-weight: 500; color: var(--text);
+    line-height: 1.3; display: -webkit-box;
     -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .yt-meta { font-size: 11px; color: var(--text3); margin-top: 3px; }
-  .yt-views { color: var(--accent2); }
+  .yt-channel { font-size: 10px; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .yt-views { color: var(--accent2); font-size: 10px; }
 
-  /* ── TABS ── */
-  .section-tabs {
-    display: flex; gap: 0; margin-bottom: 0;
-    border-bottom: 1px solid var(--border);
+  /* ── COMBO CARD: Google + YouTube dùng tab ── */
+  .tab-card-header {
+    display: flex; border-bottom: 1px solid var(--border);
   }
-  .section-tab {
-    padding: 10px 16px; font-size: 12px; font-weight: 600;
+  .tab-btn {
+    flex: 1; padding: 10px 8px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
     color: var(--text3); cursor: pointer; border: none;
     background: none; font-family: inherit;
     border-bottom: 2px solid transparent; margin-bottom: -1px;
-    transition: var(--transition);
+    transition: var(--transition); text-align: center;
   }
-  .section-tab:hover { color: var(--text2); }
-  .section-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
+  .tab-btn:hover { color: var(--text2); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; padding: 8px; }
+  .tab-pane.active { display: block; }
+  /* ── UPDATED AT ── */
   #updatedAt {
     font-size: 11px; color: var(--text3);
     text-align: right; margin-top: -10px; margin-bottom: 14px;
@@ -357,6 +410,7 @@
 </head>
 <body>
 
+<!-- TOP BAR -->
 <div class="topbar">
   <div class="logo">Tin<span>247</span></div>
   <div class="topbar-meta" id="topbarMeta">Tổng hợp tin tức · AI phân tích</div>
@@ -370,9 +424,11 @@
   </button>
 </div>
 
+<!-- MAIN -->
 <div class="container">
   <div id="updatedAt"></div>
 
+  <!-- DIGEST BANNER -->
   <div id="digestBanner" class="digest-banner" style="display:none">
     <div class="digest-label">📋 Tổng kết hôm nay</div>
     <div class="digest-headline" id="digestHeadline"></div>
@@ -380,6 +436,7 @@
     <div class="digest-points" id="digestPoints"></div>
   </div>
 
+  <!-- STATS -->
   <div class="stats-row" id="statsRow">
     <div class="stat-card"><div class="stat-num" id="statArticles">—</div><div class="stat-label">Bài báo</div></div>
     <div class="stat-card"><div class="stat-num" id="statClusters">—</div><div class="stat-label">Chủ đề</div></div>
@@ -387,8 +444,12 @@
     <div class="stat-card"><div class="stat-num" id="statTrends">—</div><div class="stat-label">Xu hướng</div></div>
   </div>
 
+  <!-- MAIN GRID -->
   <div class="main-grid">
+
+    <!-- SIDEBAR -->
     <div class="sidebar">
+      <!-- TRENDS -->
       <div class="card">
         <div class="card-header">
           <span>🔥</span>
@@ -399,6 +460,7 @@
         </div>
       </div>
 
+      <!-- SHARE -->
       <div class="card">
         <div class="card-header">
           <span>🔗</span>
@@ -412,28 +474,28 @@
         </div>
       </div>
 
+            <!-- TRENDS TAB CARD -->
       <div class="card">
-        <div class="card-header">
-          <span>🔍</span>
-          <span class="card-title">Google Trends VN</span>
+        <div class="tab-card-header">
+          <button class="tab-btn active" id="tabBtnGoogle" onclick="switchTab('google')">🔍 Google</button>
+          <button class="tab-btn" id="tabBtnYoutube" onclick="switchTab('youtube')">▶️ YouTube</button>
         </div>
-        <div class="card-body" id="googleTrendsContainer">
-          <div class="loading-state"><div class="loading-dot"></div></div>
+        <div class="tab-pane active" id="tabGoogle">
+          <div id="googleTrendsContainer">
+            <div class="loading-state" style="padding:20px"><div class="loading-dot"></div></div>
+          </div>
         </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <span>▶️</span>
-          <span class="card-title">YouTube Trending VN</span>
-        </div>
-        <div class="card-body" style="padding:8px" id="youtubeTrendsContainer">
-          <div class="loading-state"><div class="loading-dot"></div></div>
+        <div class="tab-pane" id="tabYoutube">
+          <div id="youtubeTrendsContainer">
+            <div class="loading-state" style="padding:20px"><div class="loading-dot"></div></div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- CONTENT -->
     <div class="content-area">
+      <!-- FILTER -->
       <div class="filter-bar">
         <button class="filter-btn active" onclick="setFilter('all', this)">Tất cả</button>
         <button class="filter-btn cat-vn"    onclick="setFilter('vn', this)">🇻🇳 Việt Nam</button>
@@ -441,6 +503,7 @@
         <button class="filter-btn cat-eco"   onclick="setFilter('economy', this)">💹 Kinh tế</button>
       </div>
 
+      <!-- CLUSTERS -->
       <div id="clustersContainer">
         <div class="loading-state">
           <div class="loading-dot"></div>
@@ -451,13 +514,13 @@
   </div>
 </div>
 
+<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- FIREBASE -->
 <script type="module">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-console.log("✅ VERSION 5.0 - Đã fix loadGoogleTrends + title_vi");
 
 const cfg = {
   apiKey: "AIzaSyAp8BhBUkJLwONnp3Eb8AEf8OVRMRQaPmg",
@@ -466,12 +529,13 @@ const cfg = {
   storageBucket: "tonghoptinngay.firebasestorage.app",
   messagingSenderId: "25835895512",
   appId: "1:25835895512:web:ac50fdd6d8ad10fc4335ad",
-  databaseURL: "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
+  databaseURL: "https://tonghoptinngay-default-rtdb.firebaseio.com"
 };
 const app = getApps().length ? getApp() : initializeApp(cfg);
 const database = getDatabase(app);
 const dbRef = ref(database);
 
+// ── STATE ──────────────────────────────────────────────────────
 let currentDate  = todayStr();
 let allArticles  = {};
 let allClusters  = [];
@@ -481,6 +545,7 @@ window.currentDate = currentDate;
 
 function todayStr() {
   const now = new Date();
+  // Giờ VN: UTC+7
   const vn = new Date(now.getTime() + 7*60*60*1000);
   return vn.toISOString().slice(0,10);
 }
@@ -491,7 +556,9 @@ function offsetDate(str, days) {
   return d.toISOString().slice(0,10);
 }
 
+// ── INIT ──────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
+  // Date picker
   const dp = document.getElementById("datePicker");
   dp.value = currentDate;
   dp.max   = currentDate;
@@ -507,8 +574,10 @@ window.addEventListener("DOMContentLoaded", () => {
     dp.value = currentDate; loadDate(currentDate);
   });
 
+  // Share URL
   document.getElementById("shareUrl").value = window.location.href;
 
+  // URL param: ?date=YYYY-MM-DD
   const params = new URLSearchParams(location.search);
   if (params.get("date")) {
     currentDate = params.get("date");
@@ -518,6 +587,7 @@ window.addEventListener("DOMContentLoaded", () => {
   loadDate(currentDate);
 });
 
+// ── LOAD DATA ─────────────────────────────────────────────────
 window.loadDate = async function(date) {
   setRefreshing(true);
   try {
@@ -542,8 +612,8 @@ window.loadDate = async function(date) {
     renderTrends(trends);
     renderClusters(allArticles, allClusters, currentFilter);
     updateNextBtn(date);
-    
-    // Gọi load Google Trends và YouTube Trends (có try/catch bên trong)
+    loadGoogleTrends(date);
+    loadYoutubeTrends(date);
     loadGoogleTrends(date);
     loadYoutubeTrends(date);
 
@@ -559,131 +629,6 @@ window.loadDate = async function(date) {
     setRefreshing(false);
   }
 };
-
-// ── GOOGLE TRENDS LOADER ────────────────────────────────────
-async function loadGoogleTrends(date) {
-  const el = document.getElementById("googleTrendsContainer");
-  if (!el) return;
-  
-  try {
-    // ✅ SỬA: Đọc từ google_trends (snake_case) thay vì googleTrends
-    const snap = await get(child(dbRef, `google_trends/${date}`));
-    if (!snap.exists()) {
-      el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-title" style="font-size:13px">Chưa có dữ liệu</div>
-        <p style="color:var(--text3);font-size:11px;margin-top:4px">Google Trends sẽ được cập nhật sau</p>
-      </div>`;
-      return;
-    }
-    
-    const data = snap.val();
-    const trends = Array.isArray(data) ? data : Object.values(data);
-    
-    if (!trends.length) {
-      el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-title" style="font-size:13px">Không có xu hướng</div>
-      </div>`;
-      return;
-    }
-    
-    el.innerHTML = trends.slice(0, 10).map((t, i) => {
-      // ✅ SỬA: Đọc đúng field từ Firebase
-      const keyword = t.keyword || t.query || t.topic || '';
-      const traffic = t.traffic || t.searches || t.volume || '';
-      const newsItems = t.news_items || t.news || [];
-      const firstNews = newsItems.length > 0 ? newsItems[0] : null;
-      
-      return `
-      <div class="gtrend-item">
-        <div class="gtrend-rank ${i < 3 ? 'top3' : ''}">${t.rank || (i + 1)}</div>
-        <div>
-          <div class="gtrend-keyword">${esc(keyword)}</div>
-          <div class="gtrend-traffic">${esc(formatTraffic(traffic))}</div>
-          ${firstNews ? `<div class="gtrend-news">
-            <a href="${esc(firstNews.url || firstNews.link || '#')}" target="_blank" rel="noopener">${esc(firstNews.title || '')}</a>
-          </div>` : ''}
-        </div>
-      </div>`;
-    }).join("");
-  } catch (err) {
-    console.warn("Google Trends error:", err);
-    el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-      <div class="empty-icon">🔍</div>
-      <div class="empty-title" style="font-size:13px">Chưa có dữ liệu</div>
-      <p style="color:var(--text3);font-size:11px;margin-top:4px">Google Trends sẽ được cập nhật sau</p>
-    </div>`;
-  }
-}
-
-// ── YOUTUBE TRENDS LOADER ───────────────────────────────────
-async function loadYoutubeTrends(date) {
-  const el = document.getElementById("youtubeTrendsContainer");
-  if (!el) return;
-  
-  try {
-    // ✅ SỬA: Đọc từ youtube_trending (snake_case) thay vì youtubeTrends
-    // Nếu Firebase dùng tên khác, sửa lại cho đúng
-    const snap = await get(child(dbRef, `youtube_trends/${date}`));
-    if (!snap.exists()) {
-      el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-        <div class="empty-icon">▶️</div>
-        <div class="empty-title" style="font-size:13px">Chưa có dữ liệu</div>
-        <p style="color:var(--text3);font-size:11px;margin-top:4px">YouTube Trending sẽ được cập nhật sau</p>
-      </div>`;
-      return;
-    }
-    
-    const data = snap.val();
-    const videos = Array.isArray(data) ? data : Object.values(data);
-    
-    if (!videos.length) {
-      el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-        <div class="empty-icon">▶️</div>
-        <div class="empty-title" style="font-size:13px">Không có video</div>
-      </div>`;
-      return;
-    }
-    
-    el.innerHTML = `<div class="yt-grid">${videos.slice(0, 10).map((v, i) => {
-      const videoId = v.videoId || v.video_id || v.id || '';
-      const url = v.url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '#');
-      const thumb = v.thumbnail || v.thumb || v.thumbnail_url || (videoId ? `https://i.ytimg.com/vi/${videoId}/default.jpg` : '');
-      
-      return `
-        <a class="yt-item" href="${esc(url)}" target="_blank" rel="noopener">
-          <div class="yt-rank ${i < 3 ? 'top3' : ''}">${v.rank || (i + 1)}</div>
-          ${thumb ? `<img class="yt-thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
-          <div class="yt-info">
-            <div class="yt-title">${esc(v.title || '')}</div>
-            <div class="yt-meta">
-              ${v.channel ? esc(v.channel) : ''}
-              ${v.views ? ` · <span class="yt-views">${esc(formatTraffic(v.views))}</span>` : ''}
-            </div>
-          </div>
-        </a>
-      `;
-    }).join("")}</div>`;
-  } catch (err) {
-    console.warn("YouTube Trends error:", err);
-    el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-      <div class="empty-icon">▶️</div>
-      <div class="empty-title" style="font-size:13px">Chưa có dữ liệu</div>
-      <p style="color:var(--text3);font-size:11px;margin-top:4px">YouTube Trending sẽ được cập nhật sau</p>
-    </div>`;
-  }
-}
-
-// Format số traffic/views (1000 → 1K, 1000000 → 1M)
-function formatTraffic(num) {
-  if (!num) return "";
-  const n = typeof num === 'string' ? parseInt(num.replace(/[^0-9]/g, '')) : num;
-  if (isNaN(n)) return String(num);
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
-  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
-  return String(n);
-}
 
 // ── RENDER ────────────────────────────────────────────────────
 function renderDigest(digest) {
@@ -729,11 +674,7 @@ function renderClusters(articles, clusters, filter) {
   if (filter !== "all") {
     filtered = clusters.filter(c => {
       const idxs = Array.isArray(c.articles) ? c.articles : [];
-      // Dùng articleIndex nếu có, fallback về index cũ
-      const relevant = artArr.filter(a => {
-        const idx = a.articleIndex !== undefined ? a.articleIndex : null;
-        return idx !== null && idxs.includes(idx);
-      });
+      const relevant = artArr.filter((_,i) => idxs.includes(i+1));
       return relevant.some(a => a.cat === filter);
     });
   }
@@ -743,28 +684,21 @@ function renderClusters(articles, clusters, filter) {
     return;
   }
 
+  // Sort by importance desc
   const sorted = [...filtered].sort((a,b) => (b.importance||0)-(a.importance||0));
 
   el.innerHTML = sorted.map((c, ci) => {
     const idxs = Array.isArray(c.articles) ? c.articles : [];
-    const relArts = artArr.filter(a => {
-      const idx = a.articleIndex !== undefined ? a.articleIndex : null;
-      return idx !== null && idxs.includes(idx);
-    });
+    const relArts = artArr.filter((_,i) => idxs.includes(i+1));
 
-    const articlesHtml = relArts.map(a => {
-      // ✅ FIX: Ưu tiên title_vi (tiếng Việt) nếu có, fallback về title gốc
-      const displayTitle = (a.title_vi && a.title_vi.trim()) ? a.title_vi : a.title;
-      
-      return `
+    const articlesHtml = relArts.map(a => `
       <div class="article-item">
-        <a class="article-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(displayTitle)}</a>
+        <a class="article-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a>
         <div class="article-meta">
           <span class="cat-badge cat-${a.cat}">${catLabel(a.cat)}</span>
           <span>${esc(a.source)}</span>
         </div>
-      </div>`;
-    }).join("");
+      </div>`).join("");
 
     return `
       <div class="cluster-card">
@@ -783,6 +717,78 @@ function renderClusters(articles, clusters, filter) {
   }).join("");
 }
 
+// ── FILTER ────────────────────────────────────────────────────
+
+// ── TAB SWITCHER ──────────────────────────────────────────────
+window.switchTab = function(tab) {
+  document.getElementById("tabGoogle").classList.toggle("active", tab==="google");
+  document.getElementById("tabYoutube").classList.toggle("active", tab==="youtube");
+  document.getElementById("tabBtnGoogle").classList.toggle("active", tab==="google");
+  document.getElementById("tabBtnYoutube").classList.toggle("active", tab==="youtube");
+};
+
+// ── GOOGLE TRENDS ─────────────────────────────────────────────
+window.loadGoogleTrends = async function(date) {
+  const el = document.getElementById("googleTrendsContainer");
+  if (!el) return;
+  try {
+    const snap = await get(child(dbRef, `google_trends/${date}`));
+    if (!snap.exists()) { el.innerHTML = emptyHtml("🔍","Chưa có dữ liệu"); return; }
+    const items = Array.isArray(snap.val()) ? snap.val() : Object.values(snap.val());
+    el.innerHTML = `<div class="gtrend-list">${items.slice(0,10).map((t,i) => {
+      const kw = t.keyword||t.query||"";
+      const tf = t.traffic||"";
+      const link = (t.news_items||[])[0]?.url||"";
+      return `<a class="gtrend-item" href="${link||"#"}" target="${link?"_blank":"_self"}" rel="noopener">
+        <span class="gtrend-rank ${i<3?"hot":""}">${i+1}</span>
+        <span class="gtrend-keyword">${esc(kw)}</span>
+        ${tf?`<span class="gtrend-traffic">${esc(tf)}</span>`:""}
+      </a>`;
+    }).join("")}</div>`;
+  } catch(e) {
+    console.warn("Google Trends error:", e);
+    el.innerHTML = emptyHtml("🔍","Chưa có dữ liệu");
+  }
+};
+
+// ── YOUTUBE TRENDING ──────────────────────────────────────────
+window.loadYoutubeTrends = async function(date) {
+  const el = document.getElementById("youtubeTrendsContainer");
+  if (!el) return;
+  try {
+    const snap = await get(child(dbRef, `youtube_trends/${date}`));
+    if (!snap.exists()) { el.innerHTML = emptyHtml("▶️","Chưa có dữ liệu"); return; }
+    const items = Array.isArray(snap.val()) ? snap.val() : Object.values(snap.val());
+    el.innerHTML = `<div class="yt-list">${items.slice(0,10).map((v,i) => {
+      const vid = v.videoId||v.video_id||"";
+      const url = v.url||(vid?`https://www.youtube.com/watch?v=${vid}`:"#");
+      const thumb = v.thumbnail||(vid?`https://i.ytimg.com/vi/${vid}/default.jpg`:"");
+      return `<a class="yt-item" href="${esc(url)}" target="_blank" rel="noopener">
+        <span class="yt-rank ${i<3?"hot":""}">${i+1}</span>
+        ${thumb?`<img class="yt-thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
+        <div class="yt-info">
+          <div class="yt-title">${esc(v.title||"")}</div>
+          <div class="yt-channel">${esc(v.channel||"")}${v.viewCount?` · <span class="yt-views">${fmtNum(v.viewCount)}</span>`:""}</div>
+        </div>
+      </a>`;
+    }).join("")}</div>`;
+  } catch(e) {
+    console.warn("YouTube Trends error:", e);
+    el.innerHTML = emptyHtml("▶️","Chưa có dữ liệu");
+  }
+};
+
+function fmtNum(n) {
+  if (!n) return "";
+  n = parseInt(n)||0;
+  if (n>=1000000) return (n/1000000).toFixed(1)+"M";
+  if (n>=1000) return (n/1000).toFixed(0)+"K";
+  return String(n);
+}
+function emptyHtml(icon, msg) {
+  return `<div style="text-align:center;padding:20px;color:var(--text3)"><div style="font-size:24px;margin-bottom:6px">${icon}</div><div style="font-size:12px">${msg}</div></div>`;
+}
+
 window.setFilter = function(f, btn) {
   currentFilter = f;
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
@@ -790,6 +796,7 @@ window.setFilter = function(f, btn) {
   renderClusters(allArticles, allClusters, f);
 };
 
+// ── TOGGLE CLUSTER ─────────────────────────────────────────────
 window.toggleCluster = function(ci) {
   const articles = document.getElementById("ca" + ci);
   const toggle   = document.getElementById("ct" + ci);
@@ -797,6 +804,7 @@ window.toggleCluster = function(ci) {
   toggle.classList.toggle("open", open);
 };
 
+// ── SHARE ─────────────────────────────────────────────────────
 window.copyShareLink = function() {
   const url = `${location.origin}${location.pathname}?date=${currentDate}`;
   document.getElementById("shareUrl").value = url;
@@ -808,6 +816,7 @@ window.copyShareLink = function() {
   });
 };
 
+// ── HELPERS ───────────────────────────────────────────────────
 function esc(s) {
   if (!s) return "";
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
