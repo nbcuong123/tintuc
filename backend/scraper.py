@@ -18,7 +18,7 @@ from firebase_admin import credentials, db
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
-OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free" # free model trên OpenRouter
+OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free" # free model trên OpenRouter
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 TODAY = datetime.now(VN_TZ).strftime("%Y-%m-%d")
