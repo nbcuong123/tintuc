@@ -13,12 +13,11 @@ from firebase_admin import credentials, db
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# ✅ Danh sách model ĐÚNG trên OpenRouter (cập nhật 2026)
 OPENROUTER_MODELS = [
-    "openai/gpt-4o-mini",                     # Chính: ổn định, rẻ
-    "anthropic/claude-3-haiku",                # Dự phòng 1: nhanh, rẻ
-    "mistralai/mistral-7b-instruct:free",      # Dự phòng 2: free
-    "openrouter/auto",                         # Dự phòng 3: auto routing
+    "openai/gpt-4o-mini",
+    "anthropic/claude-3-haiku",
+    "mistralai/mistral-7b-instruct:free",
+    "openrouter/auto",
 ]
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -129,13 +128,16 @@ def build_prompt(articles):
 
     return f"""Bạn là biên tập viên tin tức. Trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick).
 
-TỔNG: {n} bài, {en_count} bài EN cần dịch.
+TỔNG: {n} bài, trong đó {en_count} bài 🇬🇧EN CẦN DỊCH sang tiếng Việt.
+
+⚠️ QUAN TRỌNG: PHẢI dịch TẤT CẢ {en_count} bài EN. Mỗi bài EN phải có title_vi và summary_vi tiếng Việt.
 
 JSON format:
 {{
   "articles_vi": [
     {{"index": 1, "title_vi": "...", "summary_vi": "..."}},
-    ...đúng {n} phần tử...
+    {{"index": 2, "title_vi": "...", "summary_vi": "..."}},
+    ...ĐÚNG {n} phần tử, index từ 1 đến {n}...
   ],
   "clusters": [
     {{"topic": "Chủ đề", "summary": "Tóm tắt", "articles": [1,3], "importance": 8}}
@@ -150,13 +152,15 @@ JSON format:
   }}
 }}
 
-Yêu cầu:
-- articles_vi: đúng {n} phần tử
-- clusters: 5 nhóm
-- trends: top 3
-- digest.key_points: chỉ 2 điểm
+Yêu cầu BẮT BUỘC:
+1. articles_vi: ĐÚNG {n} phần tử, index 1→{n}
+2. Bài 🇻🇳VI: copy title_vi = title, summary_vi = summary
+3. Bài 🇬🇧EN: DỊCH title_vi và summary_vi sang tiếng Việt (TẤT CẢ {en_count} bài)
+4. clusters: 5 nhóm
+5. trends: top 3
+6. digest.key_points: 2 điểm
 
-DANH SÁCH BÀI:
+DANH SÁCH BÀI ({n} bài, {en_count} EN cần dịch):
 {articles_text}
 
 Bắt đầu JSON ngay:"""
@@ -170,24 +174,19 @@ def repair_json(text):
     text = re.sub(r"\s*```$",     "", text)
     text = text.strip()
 
-    # Tìm JSON object
     match = re.search(r"\{[\s\S]*", text)
     if match:
         text = match.group(0)
 
-    # Thử parse trực tiếp
     try:
         return json.loads(text)
     except:
         pass
     
-    # Cắt ở vị trí an toàn cuối cùng
-    # Tìm vị trí } cuối cùng mà có thể parse được
     for i in range(len(text) - 1, max(0, len(text) - 5000), -1):
         if text[i] in ['}', ']']:
             try:
                 candidate = text[:i+1]
-                # Thêm ngoặc thiếu nếu cần
                 open_b = candidate.count('{')
                 close_b = candidate.count('}')
                 while open_b > close_b:
@@ -213,7 +212,6 @@ def parse_ai_response(text):
     if result:
         return result
     
-    # Fallback: parse kiểu cũ
     text = text.strip()
     text = re.sub(r"^```json\s*", "", text)
     text = re.sub(r"^```\s*",     "", text)
@@ -249,7 +247,7 @@ def process_with_ai(articles):
                     "model":       model,
                     "messages":    [{"role": "user", "content": prompt}],
                     "temperature": 0.3,
-                    "max_tokens":  20000,  # ✅ TĂNG lên 20000
+                    "max_tokens":  20000,
                 },
                 timeout=240,
             )
@@ -385,6 +383,7 @@ def fallback_result():
 
 # ─── MERGE TRANSLATIONS ────────────────────────────────────────
 def merge_translations(articles, ai_result):
+    """Gộp bản dịch AI - match theo articleIndex"""
     arts_vi = ai_result.get("articles_vi", [])
 
     lookup = {}
@@ -393,17 +392,28 @@ def merge_translations(articles, ai_result):
         if idx is not None:
             lookup[int(idx)] = item
 
+    print(f"  🔍 DEBUG: AI trả về {len(lookup)} bản dịch")
+    print(f"  🔍 DEBUG: Indexes: {sorted(lookup.keys())[:10]}...")
+
     en_total = 0
     en_translated = 0
     en_fallback = 0
+    en_missing_details = []
 
-    for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
+    for idx, a in enumerate(articles, 1):
+        article_idx = idx
+        
         if a["lang"] == "en":
             en_total += 1
-            vi = lookup.get(i, {})
+            vi = lookup.get(article_idx, {})
             
             t_vi = (vi.get("title_vi") or "").strip()
             s_vi = (vi.get("summary_vi") or "").strip()
+
+            if en_total <= 5:
+                print(f"  🔍 EN bài #{article_idx}: {a['source']}")
+                print(f"     title: {a['title'][:50]}")
+                print(f"     title_vi: {t_vi[:50] if t_vi else '(RỖNG)'}")
 
             if t_vi and t_vi != a["title"] and len(t_vi) > 5:
                 a["title_vi"] = t_vi
@@ -413,11 +423,21 @@ def merge_translations(articles, ai_result):
                 a["title_vi"] = a["title"]
                 a["summary_vi"] = a["summary"]
                 en_fallback += 1
+                en_missing_details.append({
+                    "index": article_idx,
+                    "source": a["source"],
+                    "title": a["title"][:50]
+                })
         else:
             a["title_vi"] = a["title"]
             a["summary_vi"] = a["summary"]
 
     print(f"  📊 Dịch EN→VI: {en_translated}/{en_total} bài (fallback: {en_fallback})")
+    if en_fallback > 0:
+        print(f"  ⚠️  {en_fallback} bài EN thiếu:")
+        for item in en_missing_details[:5]:
+            print(f"     [{item['index']}] {item['source']}: {item['title']}")
+
     return articles
 
 
@@ -458,54 +478,53 @@ def fetch_google_trends():
         return []
 
 
-# ─── YOUTUBE TRENDING (YouTube RSS Feed - không cần API key) ──
+# ─── YOUTUBE TRENDING ─────────────────────────────────────────
 def fetch_youtube_trending():
-    """Lấy YouTube Trending VN qua RSS feed (không cần API key)"""
-    print("  → Fetch YouTube Trending VN (RSS)...")
+    """Lấy YouTube Trending VN qua YouTube Data API"""
+    print("  → Fetch YouTube Trending VN...")
     
-    # YouTube không có RSS feed chính thức cho trending
-    # Thử dùng YouTube Data API nếu có key
     YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
-    if YOUTUBE_API_KEY:
-        try:
-            resp = requests.get(
-                "https://www.googleapis.com/youtube/v3/videos",
-                params={
-                    "part":       "snippet,statistics",
-                    "chart":      "mostPopular",
-                    "regionCode": "VN",
-                    "maxResults": 10,
-                    "key":        YOUTUBE_API_KEY,
-                },
-                timeout=15,
-            )
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                items = []
-                for i, v in enumerate(data.get("items", []), 1):
-                    sn = v.get("snippet", {})
-                    stats = v.get("statistics", {})
-                    items.append({
-                        "rank":      i,
-                        "videoId":   v.get("id", ""),
-                        "title":     sn.get("title", ""),
-                        "channel":   sn.get("channelTitle", ""),
-                        "thumbnail": sn.get("thumbnails", {}).get("medium", {}).get("url", ""),
-                        "viewCount": int(stats.get("viewCount", 0)),
-                        "url":       f"https://www.youtube.com/watch?v={v.get('id','')}",
-                    })
-                
-                if items:
-                    print(f"     ✅ {len(items)} videos (YouTube API)")
-                    return items
-            else:
-                print(f"     ⚠️  YouTube API: HTTP {resp.status_code}")
-        except Exception as e:
-            print(f"     ⚠️  YouTube API lỗi: {e}")
+    if not YOUTUBE_API_KEY:
+        print("     ⚠️  Không có YOUTUBE_API_KEY. Bỏ qua.")
+        return []
     
-    # Fallback: Trả về empty list
-    print(f"     ⚠️  Không có YouTube API key hoặc API lỗi. Bỏ qua YouTube trending.")
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "part":       "snippet,statistics",
+                "chart":      "mostPopular",
+                "regionCode": "VN",
+                "maxResults": 10,
+                "key":        YOUTUBE_API_KEY,
+            },
+            timeout=15,
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            items = []
+            for i, v in enumerate(data.get("items", []), 1):
+                sn = v.get("snippet", {})
+                stats = v.get("statistics", {})
+                items.append({
+                    "rank":      i,
+                    "videoId":   v.get("id", ""),
+                    "title":     sn.get("title", ""),
+                    "channel":   sn.get("channelTitle", ""),
+                    "thumbnail": sn.get("thumbnails", {}).get("medium", {}).get("url", ""),
+                    "viewCount": int(stats.get("viewCount", 0)),
+                    "url":       f"https://www.youtube.com/watch?v={v.get('id','')}",
+                })
+            
+            if items:
+                print(f"     ✅ {len(items)} videos")
+                return items
+        else:
+            print(f"     ⚠️  YouTube API: HTTP {resp.status_code}")
+    except Exception as e:
+        print(f"     ⚠️  YouTube API lỗi: {e}")
+    
     return []
 
 
