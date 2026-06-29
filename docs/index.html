@@ -566,7 +566,8 @@ async function loadGoogleTrends(date) {
   if (!el) return;
   
   try {
-    const snap = await get(child(dbRef, `googleTrends/${date}`));
+    // ✅ SỬA: Đọc từ google_trends (snake_case) thay vì googleTrends
+    const snap = await get(child(dbRef, `google_trends/${date}`));
     if (!snap.exists()) {
       el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
         <div class="empty-icon">🔍</div>
@@ -587,23 +588,31 @@ async function loadGoogleTrends(date) {
       return;
     }
     
-    el.innerHTML = trends.slice(0, 10).map((t, i) => `
+    el.innerHTML = trends.slice(0, 10).map((t, i) => {
+      // ✅ SỬA: Đọc đúng field từ Firebase
+      const keyword = t.keyword || t.query || t.topic || '';
+      const traffic = t.traffic || t.searches || t.volume || '';
+      const newsItems = t.news_items || t.news || [];
+      const firstNews = newsItems.length > 0 ? newsItems[0] : null;
+      
+      return `
       <div class="gtrend-item">
-        <div class="gtrend-rank ${i < 3 ? 'top3' : ''}">${i + 1}</div>
+        <div class="gtrend-rank ${i < 3 ? 'top3' : ''}">${t.rank || (i + 1)}</div>
         <div>
-          <div class="gtrend-keyword">${esc(t.query || t.keyword || t.topic || '')}</div>
-          <div class="gtrend-traffic">${esc(formatTraffic(t.traffic || t.searches || t.volume))}</div>
-          ${t.news && t.news.length ? `<div class="gtrend-news">
-            <a href="${esc(t.news[0].url || '#')}" target="_blank" rel="noopener">${esc(t.news[0].title || '')}</a>
+          <div class="gtrend-keyword">${esc(keyword)}</div>
+          <div class="gtrend-traffic">${esc(formatTraffic(traffic))}</div>
+          ${firstNews ? `<div class="gtrend-news">
+            <a href="${esc(firstNews.url || firstNews.link || '#')}" target="_blank" rel="noopener">${esc(firstNews.title || '')}</a>
           </div>` : ''}
         </div>
-      </div>
-    `).join("");
+      </div>`;
+    }).join("");
   } catch (err) {
     console.warn("Google Trends error:", err);
     el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-      <div class="empty-icon">⚠️</div>
-      <div class="empty-title" style="font-size:13px">Lỗi tải dữ liệu</div>
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title" style="font-size:13px">Chưa có dữ liệu</div>
+      <p style="color:var(--text3);font-size:11px;margin-top:4px">Google Trends sẽ được cập nhật sau</p>
     </div>`;
   }
 }
@@ -614,7 +623,9 @@ async function loadYoutubeTrends(date) {
   if (!el) return;
   
   try {
-    const snap = await get(child(dbRef, `youtubeTrends/${date}`));
+    // ✅ SỬA: Đọc từ youtube_trending (snake_case) thay vì youtubeTrends
+    // Nếu Firebase dùng tên khác, sửa lại cho đúng
+    const snap = await get(child(dbRef, `youtube_trending/${date}`));
     if (!snap.exists()) {
       el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
         <div class="empty-icon">▶️</div>
@@ -636,13 +647,13 @@ async function loadYoutubeTrends(date) {
     }
     
     el.innerHTML = `<div class="yt-grid">${videos.slice(0, 10).map((v, i) => {
-      const videoId = v.videoId || v.id || '';
+      const videoId = v.videoId || v.video_id || v.id || '';
       const url = v.url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '#');
-      const thumb = v.thumbnail || v.thumb || (videoId ? `https://i.ytimg.com/vi/${videoId}/default.jpg` : '');
+      const thumb = v.thumbnail || v.thumb || v.thumbnail_url || (videoId ? `https://i.ytimg.com/vi/${videoId}/default.jpg` : '');
       
       return `
         <a class="yt-item" href="${esc(url)}" target="_blank" rel="noopener">
-          <div class="yt-rank ${i < 3 ? 'top3' : ''}">${i + 1}</div>
+          <div class="yt-rank ${i < 3 ? 'top3' : ''}">${v.rank || (i + 1)}</div>
           ${thumb ? `<img class="yt-thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
           <div class="yt-info">
             <div class="yt-title">${esc(v.title || '')}</div>
@@ -657,8 +668,9 @@ async function loadYoutubeTrends(date) {
   } catch (err) {
     console.warn("YouTube Trends error:", err);
     el.innerHTML = `<div class="empty-state" style="padding:30px 10px">
-      <div class="empty-icon">⚠️</div>
-      <div class="empty-title" style="font-size:13px">Lỗi tải dữ liệu</div>
+      <div class="empty-icon">▶️</div>
+      <div class="empty-title" style="font-size:13px">Chưa có dữ liệu</div>
+      <p style="color:var(--text3);font-size:11px;margin-top:4px">YouTube Trending sẽ được cập nhật sau</p>
     </div>`;
   }
 }
