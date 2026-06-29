@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Tổng Hợp Tin Ngày</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
@@ -460,7 +463,6 @@ window.currentDate = currentDate;
 
 function todayStr() {
   const now = new Date();
-  // Giờ VN: UTC+7
   const vn = new Date(now.getTime() + 7*60*60*1000);
   return vn.toISOString().slice(0,10);
 }
@@ -473,7 +475,6 @@ function offsetDate(str, days) {
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
-  // Date picker
   const dp = document.getElementById("datePicker");
   dp.value = currentDate;
   dp.max   = currentDate;
@@ -489,10 +490,8 @@ window.addEventListener("DOMContentLoaded", () => {
     dp.value = currentDate; loadDate(currentDate);
   });
 
-  // Share URL
   document.getElementById("shareUrl").value = window.location.href;
 
-  // URL param: ?date=YYYY-MM-DD
   const params = new URLSearchParams(location.search);
   if (params.get("date")) {
     currentDate = params.get("date");
@@ -585,7 +584,6 @@ function renderClusters(articles, clusters, filter) {
   if (filter !== "all") {
     filtered = clusters.filter(c => {
       const idxs = Array.isArray(c.articles) ? c.articles : [];
-      // Tìm articles có articleIndex nằm trong idxs
       const relevant = artArr.filter(a => idxs.includes(a.articleIndex));
       return relevant.some(a => a.cat === filter);
     });
@@ -596,22 +594,25 @@ function renderClusters(articles, clusters, filter) {
     return;
   }
 
-  // Sort by importance desc
   const sorted = [...filtered].sort((a,b) => (b.importance||0)-(a.importance||0));
 
   el.innerHTML = sorted.map((c, ci) => {
     const idxs = Array.isArray(c.articles) ? c.articles : [];
-    // Tìm articles có articleIndex nằm trong idxs
     const relArts = artArr.filter(a => idxs.includes(a.articleIndex));
 
-    const articlesHtml = relArts.map(a => `
+    const articlesHtml = relArts.map(a => {
+      // Ưu tiên title_vi nếu có, fallback về title
+      const displayTitle = a.title_vi && a.title_vi.trim() ? a.title_vi : a.title;
+      
+      return `
       <div class="article-item">
-        <a class="article-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title_vi || a.title)}</a>
+        <a class="article-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(displayTitle)}</a>
         <div class="article-meta">
           <span class="cat-badge cat-${a.cat}">${catLabel(a.cat)}</span>
           <span>${esc(a.source)}</span>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
 
     return `
       <div class="cluster-card">
