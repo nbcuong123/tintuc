@@ -483,24 +483,21 @@ def fetch_google_trends():
         return []
 
 
-# ─── YOUTUBE TRENDING (Dùng Invidious API - không cần key) ────
+# ─── YOUTUBE TRENDING (Piped API + YouTube API fallback) ──────
 def fetch_youtube_trending():
-    """Lấy YouTube Trending VN qua Invidious API (public, không cần key)"""
-    print("  → Fetch YouTube Trending VN (Invidious)...")
+    """Lấy YouTube Trending VN qua Piped API hoặc YouTube Data API"""
+    print("  → Fetch YouTube Trending VN...")
     
-    # Danh sách public Invidious instances
-    instances = [
-        "https://invidious.io.lol",
-        "https://inv.nadeko.net",
-        "https://invidious.privacyredirect.com",
-        "https://vid.puffyan.us",
+    # Thử Piped API trước (public, không cần key)
+    piped_instances = [
+        "https://pipedapi.kavin.rocks",
+        "https://pipedapi.adminforge.de",
+        "https://api.piped.projectsegfau.lt",
     ]
     
-    for instance in instances:
+    for instance in piped_instances:
         try:
-            url = f"{instance}/api/v1/auth/playlists"
-            # Endpoint trending
-            trending_url = f"{instance}/api/v1/trending?region=VN&type=music,gaming,movies"
+            trending_url = f"{instance}/trending?region=VN"
             
             resp = requests.get(
                 trending_url,
@@ -509,6 +506,13 @@ def fetch_youtube_trending():
             )
             
             if resp.status_code != 200:
+                print(f"     ⚠️  Piped {instance}: HTTP {resp.status_code}")
+                continue
+            
+            # Check content-type
+            content_type = resp.headers.get('content-type', '')
+            if 'application/json' not in content_type:
+                print(f"     ⚠️  Piped {instance}: Không phải JSON")
                 continue
             
             data = resp.json()
@@ -517,28 +521,71 @@ def fetch_youtube_trending():
             
             items = []
             for i, v in enumerate(data[:10], 1):
-                video_id = v.get("videoId", "")
+                video_id = v.get("url", "").replace("/watch?v=", "")
+                if not video_id:
+                    continue
+                    
                 items.append({
                     "rank":      i,
                     "videoId":   video_id,
                     "title":     v.get("title", ""),
-                    "channel":   v.get("author", ""),
-                    "thumbnail": f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg",
-                    "viewCount": v.get("viewCount", 0),
+                    "channel":   v.get("uploaderName", ""),
+                    "thumbnail": v.get("thumbnail", f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"),
+                    "viewCount": v.get("views", 0),
                     "url":       f"https://www.youtube.com/watch?v={video_id}",
                 })
             
             if items:
-                print(f"     ✅ {len(items)} trending videos (via {instance})")
+                print(f"     ✅ {len(items)} trending videos (via Piped)")
                 return items
                 
         except Exception as e:
-            print(f"     ⚠️  Instance {instance} lỗi: {e}")
+            print(f"     ⚠️  Piped {instance} lỗi: {e}")
             continue
     
-    print(f"     ❌ Tất cả Invidious instances đều fail")
+    # Fallback: YouTube Data API (nếu có key)
+    YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+    if YOUTUBE_API_KEY:
+        print("  → Thử YouTube Data API...")
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={
+                    "part":       "snippet,statistics",
+                    "chart":      "mostPopular",
+                    "regionCode": "VN",
+                    "maxResults": 10,
+                    "key":        YOUTUBE_API_KEY,
+                },
+                timeout=15,
+            )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                items = []
+                for i, v in enumerate(data.get("items", []), 1):
+                    sn = v.get("snippet", {})
+                    stats = v.get("statistics", {})
+                    items.append({
+                        "rank":      i,
+                        "videoId":   v.get("id", ""),
+                        "title":     sn.get("title", ""),
+                        "channel":   sn.get("channelTitle", ""),
+                        "thumbnail": sn.get("thumbnails", {}).get("medium", {}).get("url", ""),
+                        "viewCount": int(stats.get("viewCount", 0)),
+                        "url":       f"https://www.youtube.com/watch?v={v.get('id','')}",
+                    })
+                
+                if items:
+                    print(f"     ✅ {len(items)} trending videos (via YouTube API)")
+                    return items
+            else:
+                print(f"     ⚠️  YouTube API: HTTP {resp.status_code}")
+        except Exception as e:
+            print(f"     ⚠️  YouTube API lỗi: {e}")
+    
+    print(f"     ❌ Không lấy được YouTube trending")
     return []
-
 
 # ─── SAVE TO FIREBASE ─────────────────────────────────────────
 def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trends=None):
