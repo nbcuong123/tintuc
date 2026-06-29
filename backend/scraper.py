@@ -188,17 +188,19 @@ def process_with_ai(articles):
 def merge_translations(articles, ai_result):
     """Gộp bản dịch AI vào từng article"""
     arts_vi = ai_result.get("articles_vi", [])
-    # Build lookup: index → {title_vi, summary_vi}
     lookup = {item["index"]: item for item in arts_vi if "index" in item}
+    print(f"  → Merge: {len(lookup)} bản dịch cho {len(articles[:MAX_ARTICLES_FOR_AI])} bài")
 
     for i, a in enumerate(articles[:MAX_ARTICLES_FOR_AI], 1):
         vi = lookup.get(i, {})
         if a["lang"] == "en":
-            # Bài tiếng Anh: dùng bản dịch AI
-            a["title_vi"]   = vi.get("title_vi", a["title"])
-            a["summary_vi"] = vi.get("summary_vi", a["summary"])
+            t = vi.get("title_vi", "").strip()
+            s = vi.get("summary_vi", "").strip()
+            a["title_vi"]   = t if t else a["title"]
+            a["summary_vi"] = s if s else a["summary"]
+            if not t:
+                print(f"     ⚠️  Thiếu dịch bài [{i}]: {a[\'title\'][:50]}")
         else:
-            # Bài tiếng Việt: giữ nguyên
             a["title_vi"]   = a["title"]
             a["summary_vi"] = a["summary"]
     return articles
@@ -210,11 +212,17 @@ def save_to_firebase(ref, articles, ai_result):
 
     existing  = ref.child(f"articles/{TODAY}").get() or {}
     new_count = 0
+    upd_count = 0
     for a in articles:
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
-    print(f"     {new_count} bài mới")
+        else:
+            # Luôn update title_vi/summary_vi (có thể bài cũ chưa có)
+            ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(a.get("title_vi", ""))
+            ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(a.get("summary_vi", ""))
+            upd_count += 1
+    print(f"     {new_count} bài mới, {upd_count} bài cập nhật dịch")
 
     ref.child(f"clusters/{TODAY}").set(ai_result.get("clusters", []))
     ref.child(f"trends/{TODAY}").set(ai_result.get("trends", []))
