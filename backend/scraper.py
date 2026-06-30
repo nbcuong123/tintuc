@@ -39,7 +39,8 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI     = 100
+# Giảm xuống 40 + dùng article_id thay vì index số để AI không "lẫn" khi gán cluster
+MAX_ARTICLES_FOR_AI     = 40
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -96,12 +97,12 @@ def balance_languages(articles):
     """Trộn đều bài VI và EN"""
     vi_articles = [a for a in articles if a["lang"] == "vi"]
     en_articles = [a for a in articles if a["lang"] == "en"]
-    
+
     print(f"  → Balance: {len(vi_articles)} VI, {len(en_articles)} EN")
-    
+
     balanced = []
     vi_idx, en_idx = 0, 0
-    
+
     while vi_idx < len(vi_articles) or en_idx < len(en_articles):
         for _ in range(2):
             if vi_idx < len(vi_articles):
@@ -110,37 +111,44 @@ def balance_languages(articles):
         if en_idx < len(en_articles):
             balanced.append(en_articles[en_idx])
             en_idx += 1
-    
+
     print(f"  ✅ Đã trộn: {len(balanced)} bài (xen kẽ VI-EN)")
     return balanced
 
 
 # ─── AI ───────────────────────────────────────────────────────
 def build_prompt(articles):
+    """
+    Dùng article_id (string) thay vì số thứ tự để AI không bị lẫn lộn
+    khi gán bài vào cluster — index số dễ "ảo giác" khi batch lớn,
+    còn id duy nhất buộc AI phải copy chính xác từ danh sách đã cho.
+    """
     subset = articles[:MAX_ARTICLES_FOR_AI]
     n = len(subset)
     en_count = sum(1 for a in subset if a.get("lang") == "en")
 
     articles_text = ""
-    for i, a in enumerate(subset, 1):
+    for a in subset:
         flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
-        articles_text += f"\n[{i}] {flag} | {a['source']} | {a['cat'].upper()}\nTitle: {a['title']}\nSummary: {a['summary'][:200]}\n---"
+        articles_text += f"\nID: {a['id']} | {flag} | {a['source']} | {a['cat'].upper()}\nTitle: {a['title']}\nSummary: {a['summary'][:200]}\n---"
 
     return f"""Bạn là biên tập viên tin tức. Trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick).
 
 TỔNG: {n} bài, trong đó {en_count} bài 🇬🇧EN CẦN DỊCH sang tiếng Việt.
 
-⚠️ QUAN TRỌNG: PHẢI dịch TẤT CẢ {en_count} bài EN. Mỗi bài EN phải có title_vi và summary_vi tiếng Việt.
+⚠️ CỰC KỲ QUAN TRỌNG VỀ ID:
+- Mỗi bài có 1 "ID" duy nhất (chuỗi 12 ký tự, ví dụ: a1b2c3d4e5f6)
+- Khi gán bài vào "articles" của 1 cluster, PHẢI copy CHÍNH XÁC chuỗi ID đó, không được tự bịa ID mới, không được dùng ID của bài khác
+- CHỈ dùng ID có trong danh sách dưới đây — TUYỆT ĐỐI không tạo ID không tồn tại
+- 1 cluster chỉ chứa các bài THỰC SỰ cùng chủ đề — không nhét bài không liên quan vào chỉ để cluster có vẻ đầy đủ
 
 JSON format:
 {{
   "articles_vi": [
-    {{"index": 1, "title_vi": "...", "summary_vi": "..."}},
-    {{"index": 2, "title_vi": "...", "summary_vi": "..."}},
-    ...ĐÚNG {n} phần tử, index từ 1 đến {n}...
+    {{"id": "a1b2c3d4e5f6", "title_vi": "...", "summary_vi": "..."}}
   ],
   "clusters": [
-    {{"topic": "Chủ đề", "summary": "Tóm tắt", "articles": [1,3], "importance": 8}}
+    {{"topic": "Chủ đề", "summary": "Tóm tắt", "articles": ["a1b2c3d4e5f6", "f6e5d4c3b2a1"], "importance": 8}}
   ],
   "trends": [
     {{"rank": 1, "topic": "Xu hướng", "reason": "Lý do", "category": "economy", "score": 95}}
@@ -153,12 +161,12 @@ JSON format:
 }}
 
 Yêu cầu BẮT BUỘC:
-1. articles_vi: ĐÚNG {n} phần tử, index 1→{n}
+1. articles_vi: ĐÚNG {n} phần tử, mỗi phần tử có "id" khớp với 1 bài trong danh sách
 2. Bài 🇻🇳VI: copy title_vi = title, summary_vi = summary
 3. Bài 🇬🇧EN: DỊCH title_vi và summary_vi sang tiếng Việt (TẤT CẢ {en_count} bài)
-4. clusters: 5 nhóm
-5. trends: top 3
-6. digest.key_points: 2 điểm
+4. clusters: 5-8 nhóm, mỗi nhóm chỉ chứa ID của bài THỰC SỰ liên quan đến topic đó
+5. trends: top 5
+6. digest.key_points: 3-5 điểm
 
 DANH SÁCH BÀI ({n} bài, {en_count} EN cần dịch):
 {articles_text}
@@ -182,7 +190,7 @@ def repair_json(text):
         return json.loads(text)
     except:
         pass
-    
+
     for i in range(len(text) - 1, max(0, len(text) - 5000), -1):
         if text[i] in ['}', ']']:
             try:
@@ -192,17 +200,17 @@ def repair_json(text):
                 while open_b > close_b:
                     candidate += '}'
                     close_b += 1
-                
+
                 open_sq = candidate.count('[')
                 close_sq = candidate.count(']')
                 while open_sq > close_sq:
                     candidate += ']'
                     close_sq += 1
-                
+
                 return json.loads(candidate)
             except:
                 continue
-    
+
     return None
 
 
@@ -211,27 +219,57 @@ def parse_ai_response(text):
     result = repair_json(text)
     if result:
         return result
-    
+
     text = text.strip()
     text = re.sub(r"^```json\s*", "", text)
     text = re.sub(r"^```\s*",     "", text)
     text = re.sub(r"\s*```$",     "", text)
-    
+
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         text = match.group(0)
-    
+
     return json.loads(text)
+
+
+def validate_and_clean_clusters(result, valid_ids):
+    """
+    Lọc bỏ ID không tồn tại trong danh sách bài đã gửi cho AI.
+    Đây là lưới an toàn cuối — kể cả khi AI vẫn bịa ID, frontend
+    sẽ không bao giờ thấy bài lạc chủ đề trong cluster nữa.
+    """
+    clusters = result.get("clusters", [])
+    cleaned = []
+    dropped_total = 0
+
+    for c in clusters:
+        ids = c.get("articles", [])
+        valid = [i for i in ids if i in valid_ids]
+        dropped = len(ids) - len(valid)
+        if dropped > 0:
+            dropped_total += dropped
+            print(f"     ⚠️  Cluster '{c.get('topic','?')}': loại {dropped} ID không hợp lệ")
+        if valid:  # chỉ giữ cluster còn ít nhất 1 bài hợp lệ
+            c["articles"] = valid
+            cleaned.append(c)
+
+    if dropped_total:
+        print(f"  🧹 Tổng cộng đã loại {dropped_total} ID ảo giác khỏi clusters")
+
+    result["clusters"] = cleaned
+    return result
 
 
 def process_with_ai(articles):
     print("  → Gọi OpenRouter AI...")
     prompt = build_prompt(articles)
-    subset_count = len(articles[:MAX_ARTICLES_FOR_AI])
+    subset = articles[:MAX_ARTICLES_FOR_AI]
+    subset_count = len(subset)
+    valid_ids = {a["id"] for a in subset}
 
     for model_idx, model in enumerate(OPENROUTER_MODELS):
         print(f"  → Thử model [{model_idx+1}/{len(OPENROUTER_MODELS)}]: {model}")
-        
+
         resp = None
         text = ""
         try:
@@ -246,40 +284,40 @@ def process_with_ai(articles):
                 json={
                     "model":       model,
                     "messages":    [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens":  20000,
+                    "temperature": 0.2,
+                    "max_tokens":  12000,
                 },
                 timeout=240,
             )
-            
+
             if resp.status_code == 429:
                 print(f"  ⚠️  Model {model} rate limit (429). Thử model khác...")
                 time.sleep(3)
                 continue
-            
+
             if resp.status_code == 404:
                 print(f"  ⚠️  Model {model} không tồn tại (404). Thử model khác...")
                 continue
-            
+
             resp.raise_for_status()
-            
+
             data = resp.json()
             choices = data.get("choices", [])
             if not choices:
                 print(f"  ⚠️  Model {model} không có choices. Thử model khác...")
                 continue
-                
+
             choice = choices[0]
             finish_reason = choice.get("finish_reason")
-            
+
             if finish_reason == "error":
                 err = choice.get("error", {})
                 print(f"  ⚠️  Model {model} lỗi: {err.get('message', 'Unknown')}. Thử model khác...")
                 continue
-            
+
             text = choice["message"]["content"]
             print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
-            
+
             if finish_reason == "length":
                 print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
 
@@ -293,7 +331,10 @@ def process_with_ai(articles):
             arts_vi = result.get("articles_vi", [])
             if len(arts_vi) < subset_count:
                 print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count}. Retry...")
-                result = retry_ai(articles, prompt, result)
+                result = retry_ai(subset, prompt, result, valid_ids)
+
+            # Lưới an toàn: loại bỏ mọi ID không có thật trước khi lưu
+            result = validate_and_clean_clusters(result, valid_ids)
 
             clusters = result.get("clusters", [])
             trends   = result.get("trends", [])
@@ -307,29 +348,29 @@ def process_with_ai(articles):
         except Exception as e:
             print(f"  ⚠️  Model {model} lỗi: {e}")
             continue
-    
+
     print(f"  ❌ Tất cả {len(OPENROUTER_MODELS)} models đều thất bại")
     return fallback_result()
 
 
-def retry_ai(articles, original_prompt, partial_result):
+def retry_ai(subset, original_prompt, partial_result, valid_ids):
     print("  → Retry bổ sung...")
-    subset_count = len(articles[:MAX_ARTICLES_FOR_AI])
-    existing_indices = [a.get("index") for a in partial_result.get("articles_vi", [])]
-    missing = [i for i in range(1, subset_count + 1) if i not in existing_indices]
+    existing_ids = {a.get("id") for a in partial_result.get("articles_vi", [])}
+    missing = [a for a in subset if a["id"] not in existing_ids]
+
+    if not missing:
+        return partial_result
 
     missing_text = ""
-    for i in missing:
-        a = articles[i - 1] if i - 1 < len(articles) else None
-        if a:
-            flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
-            missing_text += f"\n[{i}] {flag} | {a['source']}\nTitle: {a['title']}\nSummary: {a['summary'][:150]}\n---"
+    for a in missing:
+        flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
+        missing_text += f"\nID: {a['id']} | {flag} | {a['source']}\nTitle: {a['title']}\nSummary: {a['summary'][:150]}\n---"
 
-    retry_prompt = f"""Bổ sung {len(missing)} bài còn thiếu:
+    retry_prompt = f"""Bổ sung {len(missing)} bài còn thiếu. Dùng đúng ID đã cho, không bịa ID mới:
 
 {missing_text}
 
-JSON: {{"articles_vi": [{{"index": {missing[0] if missing else 1}, "title_vi": "...", "summary_vi": "..."}}, ...]}}
+JSON: {{"articles_vi": [{{"id": "...", "title_vi": "...", "summary_vi": "..."}}]}}
 
 Bắt đầu JSON:"""
 
@@ -345,8 +386,8 @@ Bắt đầu JSON:"""
             json={
                 "model":       OPENROUTER_MODELS[0],
                 "messages":    [{"role": "user", "content": retry_prompt}],
-                "temperature": 0.2,
-                "max_tokens":  10000,
+                "temperature": 0.1,
+                "max_tokens":  6000,
             },
             timeout=180,
         )
@@ -354,13 +395,13 @@ Bắt đầu JSON:"""
         text = resp.json()["choices"][0]["message"]["content"]
         retry_data = parse_ai_response(text)
 
-        existing = {a["index"]: a for a in partial_result.get("articles_vi", []) if "index" in a}
+        existing = {a["id"]: a for a in partial_result.get("articles_vi", []) if "id" in a}
         for item in retry_data.get("articles_vi", []):
-            idx = item.get("index")
-            if idx is not None:
-                existing[idx] = item
+            iid = item.get("id")
+            if iid in valid_ids:
+                existing[iid] = item
 
-        partial_result["articles_vi"] = [existing[k] for k in sorted(existing.keys())]
+        partial_result["articles_vi"] = list(existing.values())
         print(f"  ✅ Retry: {len(partial_result['articles_vi'])} bài")
         return partial_result
     except Exception as e:
@@ -383,35 +424,28 @@ def fallback_result():
 
 # ─── MERGE TRANSLATIONS ────────────────────────────────────────
 def merge_translations(articles, ai_result):
-    """Gộp bản dịch AI - match theo articleIndex"""
+    """Gộp bản dịch AI - match theo article id (string), không dùng số thứ tự"""
     arts_vi = ai_result.get("articles_vi", [])
 
-    lookup = {}
-    for item in arts_vi:
-        idx = item.get("index")
-        if idx is not None:
-            lookup[int(idx)] = item
+    lookup = {item["id"]: item for item in arts_vi if "id" in item}
 
     print(f"  🔍 DEBUG: AI trả về {len(lookup)} bản dịch")
-    print(f"  🔍 DEBUG: Indexes: {sorted(lookup.keys())[:10]}...")
 
     en_total = 0
     en_translated = 0
     en_fallback = 0
     en_missing_details = []
 
-    for idx, a in enumerate(articles, 1):
-        article_idx = idx
-        
+    for a in articles:
         if a["lang"] == "en":
             en_total += 1
-            vi = lookup.get(article_idx, {})
-            
+            vi = lookup.get(a["id"], {})
+
             t_vi = (vi.get("title_vi") or "").strip()
             s_vi = (vi.get("summary_vi") or "").strip()
 
             if en_total <= 5:
-                print(f"  🔍 EN bài #{article_idx}: {a['source']}")
+                print(f"  🔍 EN bài [{a['id']}]: {a['source']}")
                 print(f"     title: {a['title'][:50]}")
                 print(f"     title_vi: {t_vi[:50] if t_vi else '(RỖNG)'}")
 
@@ -423,11 +457,7 @@ def merge_translations(articles, ai_result):
                 a["title_vi"] = a["title"]
                 a["summary_vi"] = a["summary"]
                 en_fallback += 1
-                en_missing_details.append({
-                    "index": article_idx,
-                    "source": a["source"],
-                    "title": a["title"][:50]
-                })
+                en_missing_details.append({"id": a["id"], "source": a["source"], "title": a["title"][:50]})
         else:
             a["title_vi"] = a["title"]
             a["summary_vi"] = a["summary"]
@@ -436,7 +466,7 @@ def merge_translations(articles, ai_result):
     if en_fallback > 0:
         print(f"  ⚠️  {en_fallback} bài EN thiếu:")
         for item in en_missing_details[:5]:
-            print(f"     [{item['index']}] {item['source']}: {item['title']}")
+            print(f"     [{item['id']}] {item['source']}: {item['title']}")
 
     return articles
 
@@ -482,12 +512,12 @@ def fetch_google_trends():
 def fetch_youtube_trending():
     """Lấy YouTube Trending VN qua YouTube Data API"""
     print("  → Fetch YouTube Trending VN...")
-    
+
     YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
     if not YOUTUBE_API_KEY:
         print("     ⚠️  Không có YOUTUBE_API_KEY. Bỏ qua.")
         return []
-    
+
     try:
         resp = requests.get(
             "https://www.googleapis.com/youtube/v3/videos",
@@ -500,7 +530,7 @@ def fetch_youtube_trending():
             },
             timeout=15,
         )
-        
+
         if resp.status_code == 200:
             data = resp.json()
             items = []
@@ -516,7 +546,7 @@ def fetch_youtube_trending():
                     "viewCount": int(stats.get("viewCount", 0)),
                     "url":       f"https://www.youtube.com/watch?v={v.get('id','')}",
                 })
-            
+
             if items:
                 print(f"     ✅ {len(items)} videos")
                 return items
@@ -524,7 +554,7 @@ def fetch_youtube_trending():
             print(f"     ⚠️  YouTube API: HTTP {resp.status_code}")
     except Exception as e:
         print(f"     ⚠️  YouTube API lỗi: {e}")
-    
+
     return []
 
 
@@ -537,13 +567,11 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
     upd_count = 0
     new_with_vi = 0
     new_no_vi = 0
-    
-    for idx, a in enumerate(articles, 1):
+
+    for a in articles:
         t_vi = a.get("title_vi", "")
         s_vi = a.get("summary_vi", "")
-        
-        a["articleIndex"] = idx
-        
+
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
@@ -555,9 +583,8 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
         else:
             ref.child(f"articles/{TODAY}/{a['id']}/title_vi").set(t_vi)
             ref.child(f"articles/{TODAY}/{a['id']}/summary_vi").set(s_vi)
-            ref.child(f"articles/{TODAY}/{a['id']}/articleIndex").set(idx)
             upd_count += 1
-    
+
     print(f"     📥 {new_count} mới ({new_with_vi} EN dịch, {new_no_vi} EN thiếu)")
     print(f"     🔄 {upd_count} cũ cập nhật")
 
