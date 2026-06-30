@@ -14,10 +14,8 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 OPENROUTER_MODELS = [
-    "openai/gpt-4o-mini",
-    "anthropic/claude-3-haiku",
-    "mistralai/mistral-7b-instruct:free",
     "openrouter/auto",
+    "anthropic/claude-3-haiku",
 ]
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
