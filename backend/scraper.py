@@ -38,7 +38,7 @@ RSS_SOURCES = [
 
 MAX_ARTICLES_PER_SOURCE = 10
 # Giảm xuống 40 + dùng article_id thay vì index số để AI không "lẫn" khi gán cluster
-MAX_ARTICLES_FOR_AI     = 40
+MAX_ARTICLES_FOR_AI     = 25  # giảm để model ít nhầm lẫn nội dung giữa các bài trong batch
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -264,10 +264,11 @@ def validate_and_clean_clusters(result, valid_ids):
     return result
 
 
-def process_with_ai(articles):
-    print("  → Gọi OpenRouter AI...")
-    prompt = build_prompt(articles)
-    subset = articles[:MAX_ARTICLES_FOR_AI]
+def process_batch_with_ai(batch_articles, batch_label=""):
+    """Xử lý 1 batch (tối đa MAX_ARTICLES_FOR_AI bài) qua AI."""
+    print(f"  → Gọi OpenRouter AI{batch_label}...")
+    prompt = build_prompt(batch_articles)
+    subset = batch_articles[:MAX_ARTICLES_FOR_AI]
     subset_count = len(subset)
     valid_ids = {a["id"] for a in subset}
 
@@ -449,6 +450,84 @@ def fallback_result():
     }
 
 
+def process_with_ai(articles):
+    """
+    Chia toàn bộ articles thành nhiều batch (mỗi batch tối đa
+    MAX_ARTICLES_FOR_AI bài) và gọi AI tuần tự cho từng batch,
+    sau đó gộp kết quả lại — đảm bảo MỌI bài đều được dịch/cluster,
+    không chỉ riêng batch đầu tiên như trước đây.
+    """
+    total = len(articles)
+    batches = [articles[i:i + MAX_ARTICLES_FOR_AI] for i in range(0, total, MAX_ARTICLES_FOR_AI)]
+    print(f"  → Tổng {total} bài, chia thành {len(batches)} batch (mỗi batch ≤{MAX_ARTICLES_FOR_AI} bài)")
+
+    merged_articles_vi = []
+    merged_clusters = []
+    merged_trends = []
+    digest_result = None  # digest tổng kết chỉ lấy từ batch đầu tiên
+
+    for i, batch in enumerate(batches, 1):
+        label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
+        batch_result = process_batch_with_ai(batch, batch_label=label)
+
+        merged_articles_vi.extend(batch_result.get("articles_vi", []))
+        merged_clusters.extend(batch_result.get("clusters", []))
+        merged_trends.extend(batch_result.get("trends", []))
+
+        if i == 1:
+            digest_result = batch_result.get("digest")
+
+    # Trends: gộp từ nhiều batch rồi lấy lại top 5 theo score
+    merged_trends.sort(key=lambda t: t.get("score", 0), reverse=True)
+    merged_trends = merged_trends[:5]
+    for idx, t in enumerate(merged_trends, 1):
+        t["rank"] = idx
+
+    if not digest_result:
+        digest_result = fallback_result()["digest"]
+
+    print(f"  ✅ Tổng hợp {len(batches)} batch: {len(merged_articles_vi)} bài dịch, {len(merged_clusters)} clusters, {len(merged_trends)} trends")
+
+    return {
+        "articles_vi": merged_articles_vi,
+        "clusters":    merged_clusters,
+        "trends":      merged_trends,
+        "digest":      digest_result,
+    }
+
+
+# ─── VALIDATE TRANSLATION MATCH ───────────────────────────────
+def extract_signature_tokens(text):
+    """
+    Trích các 'dấu vân tay' của văn bản: số (tiền, %, năm...) và
+    cụm chữ viết hoa liên tiếp (tên riêng, địa danh, tổ chức).
+    Đây là những thứ PHẢI xuất hiện giống nhau giữa bản gốc và bản
+    dịch dù khác ngôn ngữ — nếu summary_vi của 1 bài có dấu vân tay
+    hoàn toàn khác với title/summary gốc của chính bài đó, khả năng
+    cao AI đã gán nhầm nội dung từ bài khác.
+    """
+    if not text:
+        return set()
+    numbers = set(re.findall(r"\d[\d.,]*", text))
+    proper_nouns = set(re.findall(r"[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,})*", text))
+    return numbers | proper_nouns
+
+
+def translation_looks_mismatched(orig_title, orig_summary, t_vi, s_vi):
+    """
+    Trả về True nếu bản dịch có dấu hiệu bị gán nhầm sang nội dung
+    của bài khác (không có điểm chung nào về số liệu/tên riêng với
+    bài gốc, trong khi bài gốc CÓ chứa các dấu vân tay đó).
+    """
+    orig_sig = extract_signature_tokens(orig_title + " " + orig_summary)
+    if not orig_sig:
+        return False  # bài gốc không có gì đặc trưng để đối chiếu, bỏ qua check này
+
+    vi_sig = extract_signature_tokens(t_vi + " " + s_vi)
+    overlap = orig_sig & vi_sig
+    return len(overlap) == 0
+
+
 # ─── MERGE TRANSLATIONS ────────────────────────────────────────
 def merge_translations(articles, ai_result):
     """Gộp bản dịch AI - match theo article id (string), không dùng số thứ tự"""
@@ -476,7 +555,11 @@ def merge_translations(articles, ai_result):
                 print(f"     title: {a['title'][:50]}")
                 print(f"     title_vi: {t_vi[:50] if t_vi else '(RỖNG)'}")
 
-            if t_vi and t_vi != a["title"] and len(t_vi) > 5:
+            mismatched = translation_looks_mismatched(a["title"], a["summary"], t_vi, s_vi)
+            if mismatched and en_total <= 10:
+                print(f"     ⚠️  Nghi ngờ gán nhầm nội dung (không có điểm chung số/tên riêng)")
+
+            if t_vi and t_vi != a["title"] and len(t_vi) > 5 and not mismatched:
                 a["title_vi"] = t_vi
                 a["summary_vi"] = s_vi if s_vi else a["summary"]
                 en_translated += 1
@@ -484,18 +567,25 @@ def merge_translations(articles, ai_result):
                 a["title_vi"] = a["title"]
                 a["summary_vi"] = a["summary"]
                 en_fallback += 1
-                en_missing_details.append({"id": a["id"], "source": a["source"], "title": a["title"][:50]})
+                reason = "mismatched" if mismatched else "missing/empty"
+                en_missing_details.append({"id": a["id"], "source": a["source"], "title": a["title"][:50], "reason": reason})
         else:
             a["title_vi"] = a["title"]
             vi = lookup.get(a["id"], {})
             s_vi = (vi.get("summary_vi") or "").strip()
-            a["summary_vi"] = s_vi if s_vi else a["summary"]
+            # Bài VI gốc: chỉ chấp nhận summary_vi của AI nếu nó thực sự liên quan
+            # đến bài này (đối chiếu số/tên riêng), nếu không thì giữ summary gốc
+            if s_vi and not translation_looks_mismatched(a["title"], a["summary"], a["title"], s_vi):
+                a["summary_vi"] = s_vi
+            else:
+                a["summary_vi"] = a["summary"]
 
-    print(f"  📊 Dịch EN→VI: {en_translated}/{en_total} bài (fallback: {en_fallback})")
+    mismatch_count = sum(1 for item in en_missing_details if item.get("reason") == "mismatched")
+    print(f"  📊 Dịch EN→VI: {en_translated}/{en_total} bài (fallback: {en_fallback}, trong đó {mismatch_count} bị nghi gán nhầm nội dung)")
     if en_fallback > 0:
-        print(f"  ⚠️  {en_fallback} bài EN thiếu:")
+        print(f"  ⚠️  {en_fallback} bài EN thiếu/nghi nhầm:")
         for item in en_missing_details[:5]:
-            print(f"     [{item['id']}] {item['source']}: {item['title']}")
+            print(f"     [{item['id']}] ({item.get('reason','?')}) {item['source']}: {item['title']}")
 
     return articles
 
