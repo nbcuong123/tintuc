@@ -132,7 +132,7 @@ def build_prompt(articles):
         flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
         articles_text += f"\nID: {a['id']} | {flag} | {a['source']} | {a['cat'].upper()}\nTitle: {a['title']}\nSummary: {a['summary'][:200]}\n---"
 
-    return f"""Bạn là biên tập viên tin tức. Trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick).
+    return f"""Bạn là biên tập viên tin tức cao cấp. Trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick).
 
 TỔNG: {n} bài, trong đó {en_count} bài 🇬🇧EN CẦN DỊCH sang tiếng Việt.
 
@@ -145,7 +145,7 @@ TỔNG: {n} bài, trong đó {en_count} bài 🇬🇧EN CẦN DỊCH sang tiến
 JSON format:
 {{
   "articles_vi": [
-    {{"id": "a1b2c3d4e5f6", "title_vi": "...", "summary_vi": "..."}}
+    {{"id": "a1b2c3d4e5f6", "title_vi": "...", "summary_vi": "Tóm tắt 2-3 câu nêu rõ: chuyện gì xảy ra, ai liên quan, vì sao đáng chú ý hoặc ảnh hưởng gì"}}
   ],
   "clusters": [
     {{"topic": "Chủ đề", "summary": "Tóm tắt", "articles": ["a1b2c3d4e5f6", "f6e5d4c3b2a1"], "importance": 8}}
@@ -154,19 +154,25 @@ JSON format:
     {{"rank": 1, "topic": "Xu hướng", "reason": "Lý do", "category": "economy", "score": 95}}
   ],
   "digest": {{
-    "headline": "Tiêu đề",
-    "overview": "Tổng quan",
-    "key_points": ["Điểm 1", "Điểm 2"]
+    "headline": "Tiêu đề tổng kết ấn tượng cho cả ngày",
+    "overview": "Đoạn tổng quan 4-6 câu mô tả bức tranh chung của ngày hôm nay: không khí chung, các mảng tin chính, điều gì đáng chú ý nhất",
+    "key_points": ["Điểm nổi bật 1 (1 câu cụ thể)", "Điểm nổi bật 2", "Điểm nổi bật 3", "Điểm nổi bật 4", "Điểm nổi bật 5", "Điểm nổi bật 6"],
+    "topic_groups": [
+      {{"group_name": "Kinh tế - Tài chính", "summary": "Đoạn 2-4 câu khái quát diễn biến kinh tế nổi bật, nêu xu hướng chung và 1-2 sự kiện cụ thể quan trọng nhất"}},
+      {{"group_name": "Xã hội - Đời sống", "summary": "Đoạn 2-4 câu về các vấn đề xã hội, đời sống nổi bật"}},
+      {{"group_name": "Quốc tế", "summary": "Đoạn 2-4 câu về tình hình thế giới đáng chú ý"}}
+    ]
   }}
 }}
 
 Yêu cầu BẮT BUỘC:
 1. articles_vi: ĐÚNG {n} phần tử, mỗi phần tử có "id" khớp với 1 bài trong danh sách
-2. Bài 🇻🇳VI: copy title_vi = title, summary_vi = summary
-3. Bài 🇬🇧EN: DỊCH title_vi và summary_vi sang tiếng Việt (TẤT CẢ {en_count} bài)
+2. Bài 🇻🇳VI: title_vi = title gốc, summary_vi PHẢI viết lại thành 2-3 câu chi tiết, diễn giải rõ ràng hơn dựa trên title+summary gốc đã cho (không copy nguyên văn)
+3. Bài 🇬🇧EN: DỊCH title_vi và summary_vi sang tiếng Việt, summary_vi cũng phải 2-3 câu chi tiết
 4. clusters: 5-8 nhóm, mỗi nhóm chỉ chứa ID của bài THỰC SỰ liên quan đến topic đó
 5. trends: top 5
-6. digest.key_points: 3-5 điểm
+6. digest.key_points: 5-6 điểm cụ thể, mỗi điểm nêu rõ sự kiện thay vì chung chung
+7. digest.topic_groups: PHẢI có 3-5 nhóm (chỉ chọn nhóm thực sự có tin trong danh sách, ví dụ: Kinh tế - Tài chính, Xã hội - Đời sống, Quốc tế, Công nghệ, Thể thao...), mỗi nhóm có summary riêng dựa trên các bài thuộc nhóm đó
 
 DANH SÁCH BÀI ({n} bài, {en_count} EN cần dịch):
 {articles_text}
@@ -285,7 +291,7 @@ def process_with_ai(articles):
                     "model":       model,
                     "messages":    [{"role": "user", "content": prompt}],
                     "temperature": 0.2,
-                    "max_tokens":  12000,
+                    "max_tokens":  16000,
                 },
                 timeout=240,
             )
@@ -460,7 +466,9 @@ def merge_translations(articles, ai_result):
                 en_missing_details.append({"id": a["id"], "source": a["source"], "title": a["title"][:50]})
         else:
             a["title_vi"] = a["title"]
-            a["summary_vi"] = a["summary"]
+            vi = lookup.get(a["id"], {})
+            s_vi = (vi.get("summary_vi") or "").strip()
+            a["summary_vi"] = s_vi if s_vi else a["summary"]
 
     print(f"  📊 Dịch EN→VI: {en_translated}/{en_total} bài (fallback: {en_fallback})")
     if en_fallback > 0:
