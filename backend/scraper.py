@@ -333,8 +333,21 @@ def process_with_ai(articles):
                 continue
 
             arts_vi = result.get("articles_vi", [])
-            if len(arts_vi) < subset_count:
-                print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count}. Retry...")
+            # Kiểm tra cả số lượng LẪN chất lượng dịch — AI có thể trả đủ
+            # số phần tử nhưng để title_vi rỗng/trùng title gốc cho các bài
+            # cuối batch khi xử lý nhiều bài cùng lúc.
+            en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
+            vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
+            poorly_translated = 0
+            for eid in en_ids_in_subset:
+                item = vi_lookup.get(eid)
+                t_vi = (item.get("title_vi") or "").strip() if item else ""
+                orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
+                if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
+                    poorly_translated += 1
+
+            if len(arts_vi) < subset_count or poorly_translated > 0:
+                print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
                 result = retry_ai(subset, prompt, result, valid_ids)
 
             # Lưới an toàn: loại bỏ mọi ID không có thật trước khi lưu
@@ -359,8 +372,18 @@ def process_with_ai(articles):
 
 def retry_ai(subset, original_prompt, partial_result, valid_ids):
     print("  → Retry bổ sung...")
-    existing_ids = {a.get("id") for a in partial_result.get("articles_vi", [])}
-    missing = [a for a in subset if a["id"] not in existing_ids]
+    arts_vi = partial_result.get("articles_vi", [])
+    vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
+
+    # Lấy cả bài THIẾU lẫn bài có mặt nhưng DỊCH KÉM (title_vi rỗng/trùng gốc)
+    missing = []
+    for a in subset:
+        if a.get("lang") != "en":
+            continue  # chỉ cần retry bài tiếng Anh, bài VI không cần dịch
+        item = vi_lookup.get(a["id"])
+        t_vi = (item.get("title_vi") or "").strip() if item else ""
+        if not t_vi or t_vi == a["title"] or len(t_vi) <= 5:
+            missing.append(a)
 
     if not missing:
         return partial_result
@@ -391,7 +414,7 @@ Bắt đầu JSON:"""
                 "model":       OPENROUTER_MODELS[0],
                 "messages":    [{"role": "user", "content": retry_prompt}],
                 "temperature": 0.1,
-                "max_tokens":  6000,
+                "max_tokens":  8000,
             },
             timeout=180,
         )
