@@ -66,6 +66,10 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   border-radius:20px; padding:4px 12px; font-size:12px; color:var(--text2);
 }
 .digest-tag::before { content:"• "; color:var(--accent); }
+.digest-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+.dg-item { background:rgba(0,0,0,0.15); border-radius:8px; padding:12px 14px; }
+.dg-name { font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+.dg-text { font-size:12px; color:var(--text2); line-height:1.6; }
 
 .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
 .stat { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:16px; text-align:center; }
@@ -119,6 +123,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .art-title { font-size:13px; font-weight:500; color:var(--text); text-decoration:none; line-height:1.4; display:block; }
 .art-title:hover { color:var(--accent); }
 .art-meta { display:flex; gap:8px; align-items:center; font-size:11px; color:var(--text3); margin-top:2px; }
+.art-summary { font-size:12px; color:var(--text2); line-height:1.6; margin-top:5px; }
 .badge { display:inline-block; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; text-transform:uppercase; }
 .bvn  { background:rgba(79,142,247,.15); color:#4f8ef7; }
 .bwo  { background:rgba(160,79,247,.15); color:#a04ff7; }
@@ -197,6 +202,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
     <div class="digest-h" id="dHead"></div>
     <div class="digest-p" id="dOver"></div>
     <div class="digest-tags" id="dTags"></div>
+    <div class="digest-groups" id="dGroups"></div>
   </div>
 
   <div class="stats">
@@ -346,6 +352,11 @@ function renderDigest(d){
   document.getElementById("dHead").textContent=d.headline;
   document.getElementById("dOver").textContent=d.overview||"";
   document.getElementById("dTags").innerHTML=(d.key_points||[]).map(p=>`<span class="digest-tag">${esc(p)}</span>`).join("");
+  document.getElementById("dGroups").innerHTML=(d.topic_groups||[]).map(g=>`
+    <div class="dg-item">
+      <div class="dg-name">${esc(g.group_name)}</div>
+      <div class="dg-text">${esc(g.summary)}</div>
+    </div>`).join("");
 }
 
 function renderStats(a,c,t){
@@ -395,6 +406,7 @@ function renderClusters(a,cls,f){
     const rows=rel.map(a=>`
       <div class="art-row">
         <a class="art-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title_vi||a.title)}</a>
+        ${(a.summary_vi||a.summary)?`<div class="art-summary">${esc(a.summary_vi||a.summary)}</div>`:""}
         <div class="art-meta">${catBadge(a.cat)}<span>${esc(a.source)}</span></div>
       </div>`).join("");
     return `
