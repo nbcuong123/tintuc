@@ -1,6 +1,6 @@
 """
 News Digest Scraper + Multi-Provider AI Processor (với dịch EN→VI)
-Providers: Gemini (ưu tiên) → Groq → OpenRouter
+Providers: Groq (ưu tiên) → Gemini → OpenRouter
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -37,22 +37,20 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# 🔑 Thứ tự ưu tiên: Gemini → Groq → OpenRouter
+# 🔑 Thứ tự ưu tiên: Groq (ổn định) → Gemini (fallback) → OpenRouter
 AI_PROVIDERS = []
-if GEMINI_API_KEY:
-    AI_PROVIDERS.append({
-        "name":   "gemini",
-        "models": [
-            "gemini-2.5-flash-lite",     # miễn phí, cực nhanh
-            "gemini-2.5-flash",          # thông minh hơn
-            "gemini-2.0-flash",          # ổn định
-        ],
-    })
 if GROQ_API_KEY:
     AI_PROVIDERS.append({
         "name":   "groq",
         "models": [
-            "llama-3.3-70b-versatile",   # bỏ llama-3.1-8b-instant (luôn 413)
+            "llama-3.3-70b-versatile",   # ổn định nhất, 30 req/phút
+        ],
+    })
+if GEMINI_API_KEY:
+    AI_PROVIDERS.append({
+        "name":   "gemini",
+        "models": [
+            "gemini-2.5-flash",          # chỉ thử 1 lần, không retry
         ],
     })
 if OPENROUTER_API_KEY:
@@ -65,8 +63,8 @@ if not AI_PROVIDERS:
     raise ValueError(
         "❌ Chưa cấu hình AI provider nào!\n"
         "Hãy set ít nhất 1 biến môi trường:\n"
-        "  • GEMINI_API_KEY    (khuyến nghị - https://aistudio.google.com/apikey)\n"
-        "  • GROQ_API_KEY      (https://console.groq.com/keys)\n"
+        "  • GROQ_API_KEY      (khuyến nghị - https://console.groq.com/keys)\n"
+        "  • GEMINI_API_KEY    (https://aistudio.google.com/apikey)\n"
         "  • OPENROUTER_API_KEY"
     )
 
@@ -91,7 +89,6 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-# Tăng từ 6 → 8 bài/batch để giảm số batch (19 → 14), tránh Gemini 429
 MAX_ARTICLES_FOR_AI     = 8
 
 
@@ -167,7 +164,7 @@ def balance_languages(articles):
 
 # ─── AI PROVIDERS ─────────────────────────────────────────────
 def build_prompt(articles):
-    """Prompt tối ưu để tránh hallucination và 413."""
+    """Prompt tối ưu để tránh hallucination."""
     subset = articles[:MAX_ARTICLES_FOR_AI]
     n = len(subset)
     en_count = sum(1 for a in subset if a.get("lang") == "en")
@@ -384,7 +381,7 @@ def _process_sub_batch(pname, model, caller, sub_articles):
 
 
 def process_batch_with_ai(batch_articles, batch_label=""):
-    """Xử lý 1 batch với retry logic cho 429."""
+    """Xử lý 1 batch - Groq ưu tiên, Gemini chỉ thử 1 lần."""
     print(f"  → Gọi AI{batch_label}...")
     subset = batch_articles[:MAX_ARTICLES_FOR_AI]
     valid_ids = {a["id"] for a in subset}
@@ -397,8 +394,11 @@ def process_batch_with_ai(batch_articles, batch_label=""):
         caller = PROVIDER_CALLERS[pname]
 
         for model_idx, model in enumerate(provider["models"]):
-            # Retry logic cho 429: tối đa 2 lần retry
-            for retry_attempt in range(3):
+            # Gemini: chỉ thử 1 lần, không retry (vì free tier quá hạn chế)
+            # Groq/OpenRouter: retry 2 lần cho 429
+            max_retries = 1 if pname == "gemini" else 3
+            
+            for retry_attempt in range(max_retries):
                 print(f"  → Thử [{pname}] {model} ({model_idx+1}/{len(provider['models'])})")
                 text = ""
                 finish_reason = ""
@@ -414,7 +414,7 @@ def process_batch_with_ai(batch_articles, batch_label=""):
                         result = parse_ai_response(text)
                     except json.JSONDecodeError as e:
                         print(f"  ⚠️  [{pname}] {model} JSON parse lỗi: {e}")
-                        break  # JSON lỗi → thử model khác
+                        break
 
                     # Kiểm tra chất lượng
                     arts_vi = result.get("articles_vi", [])
@@ -443,16 +443,22 @@ def process_batch_with_ai(batch_articles, batch_label=""):
                     status = e.response.status_code if e.response is not None else "?"
                     err_text = str(e)[:120]
 
-                    # 429 rate limit: retry cùng model với exponential backoff
+                    # 429 rate limit
                     if status == 429:
-                        if retry_attempt < 2:
-                            wait_time = 15 * (retry_attempt + 1)  # 15s, 30s
-                            print(f"  ⚠️  [{pname}] {model} rate limit (429). Chờ {wait_time}s trước khi retry ({retry_attempt+1}/2)...")
-                            time.sleep(wait_time)
-                            continue  # retry cùng model
+                        if pname == "gemini":
+                            # Gemini: không retry, chuyển model khác ngay
+                            print(f"  ⚠️  [{pname}] {model} rate limit (429). Chuyển model khác...")
+                            break
                         else:
-                            print(f"  ⚠️  [{pname}] {model} đã retry 2 lần vẫn 429. Chuyển model khác...")
-                            break  # thoát vòng retry, thử model khác
+                            # Groq/OpenRouter: retry với backoff
+                            if retry_attempt < max_retries - 1:
+                                wait_time = 10 * (retry_attempt + 1)
+                                print(f"  ⚠️  [{pname}] {model} rate limit (429). Chờ {wait_time}s...")
+                                time.sleep(wait_time)
+                                continue
+                            else:
+                                print(f"  ⚠️  [{pname}] {model} đã retry {max_retries-1} lần vẫn 429. Chuyển model khác...")
+                                break
 
                     # 413 Payload Too Large: chia batch
                     if status == 413 and len(subset) > 4:
@@ -485,11 +491,11 @@ def process_batch_with_ai(batch_articles, batch_label=""):
 
                     # Các lỗi khác
                     print(f"  ⚠️  [{pname}] {model} HTTP {status}: {err_text}")
-                    break  # thoát vòng retry, thử model khác
+                    break
 
                 except Exception as e:
                     print(f"  ⚠️  [{pname}] {model} lỗi: {str(e)[:150]}")
-                    break  # lỗi khác → thử model khác
+                    break
 
     print(f"  ❌ Tất cả providers/models đều thất bại")
     return fallback_result()
@@ -573,9 +579,9 @@ def process_with_ai(articles):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
-        # Tăng delay từ 1s → 5s để tránh Gemini 429
+        # Delay 3s giữa các batch (đủ cho Groq, không cần chờ Gemini)
         if i < len(batches):
-            time.sleep(5)
+            time.sleep(3)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
