@@ -1,6 +1,6 @@
 """
 News Digest Scraper + Multi-Provider AI Processor (với dịch EN→VI)
-Providers: Gemini (free, ưu tiên) → Groq → OpenRouter
+Providers: Gemini (ưu tiên) → Groq → OpenRouter
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -38,14 +38,13 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 # 🔑 Thứ tự ưu tiên: Gemini → Groq → OpenRouter
-# Gemini miễn phí rộng rãi nhất (1M tokens input, 1500 req/ngày)
 AI_PROVIDERS = []
 if GEMINI_API_KEY:
     AI_PROVIDERS.append({
         "name":   "gemini",
         "models": [
-            "gemini-2.5-flash-lite",     # miễn phí, cực nhanh, 1M tokens
-            "gemini-2.5-flash",          # mới nhất, thông minh hơn
+            "gemini-2.5-flash-lite",     # miễn phí, cực nhanh
+            "gemini-2.5-flash",          # thông minh hơn
             "gemini-2.0-flash",          # ổn định
         ],
     })
@@ -53,8 +52,7 @@ if GROQ_API_KEY:
     AI_PROVIDERS.append({
         "name":   "groq",
         "models": [
-            "llama-3.1-8b-instant",      # nhỏ nhất, dễ pass Groq 413
-            "llama-3.3-70b-versatile",
+            "llama-3.3-70b-versatile",   # bỏ llama-3.1-8b-instant (luôn 413)
         ],
     })
 if OPENROUTER_API_KEY:
@@ -93,8 +91,8 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-# Groq free tier rất hẹp → 6 bài/batch là an toàn nhất
-MAX_ARTICLES_FOR_AI     = 6
+# Tăng từ 6 → 8 bài/batch để giảm số batch (19 → 14), tránh Gemini 429
+MAX_ARTICLES_FOR_AI     = 8
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -169,7 +167,7 @@ def balance_languages(articles):
 
 # ─── AI PROVIDERS ─────────────────────────────────────────────
 def build_prompt(articles):
-    """Prompt siêu gọn để tránh Groq 413."""
+    """Prompt tối ưu để tránh hallucination và 413."""
     subset = articles[:MAX_ARTICLES_FOR_AI]
     n = len(subset)
     en_count = sum(1 for a in subset if a.get("lang") == "en")
@@ -177,11 +175,12 @@ def build_prompt(articles):
     articles_text = ""
     for a in subset:
         flag = "EN" if a.get("lang") == "en" else "VI"
-        # Chỉ giữ 80 chars summary - đủ để AI hiểu context
         articles_text += f"\n[{a['id']}|{flag}|{a['cat']}] {a['title']}\n{a['summary'][:80]}\n---"
 
     return f"""Biên tập viên tin tức. Trả JSON thuần (không markdown).
-{n} bài ({en_count} EN cần dịch VI). ID là chuỗi 12 ký tự - CHỈ dùng ID có trong danh sách.
+{n} bài ({en_count} EN cần dịch VI). ID là chuỗi 12 ký tự.
+
+⚠️ CỰC KỲ QUAN TRỌNG: Mỗi summary_vi PHẢI tương ứng với đúng bài có cùng ID. KHÔNG được gán summary của bài này sang bài khác.
 
 JSON:
 {{
@@ -296,7 +295,7 @@ def call_groq(model, prompt):
             "model":       model,
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
-            "max_tokens":  8000,  # giảm từ 16000 để tránh 413
+            "max_tokens":  8000,
         },
         timeout=(10, 120),
     )
@@ -385,7 +384,7 @@ def _process_sub_batch(pname, model, caller, sub_articles):
 
 
 def process_batch_with_ai(batch_articles, batch_label=""):
-    """Xử lý 1 batch, tự động chia nhỏ nếu gặp 413."""
+    """Xử lý 1 batch với retry logic cho 429."""
     print(f"  → Gọi AI{batch_label}...")
     subset = batch_articles[:MAX_ARTICLES_FOR_AI]
     valid_ids = {a["id"] for a in subset}
@@ -398,92 +397,99 @@ def process_batch_with_ai(batch_articles, batch_label=""):
         caller = PROVIDER_CALLERS[pname]
 
         for model_idx, model in enumerate(provider["models"]):
-            print(f"  → Thử [{pname}] {model} ({model_idx+1}/{len(provider['models'])})")
-            text = ""
-            finish_reason = ""
-            try:
-                with hard_timeout(130):
-                    text, finish_reason = caller(model, prompt)
-                print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
-
-                if finish_reason == "length":
-                    print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
-
+            # Retry logic cho 429: tối đa 2 lần retry
+            for retry_attempt in range(3):
+                print(f"  → Thử [{pname}] {model} ({model_idx+1}/{len(provider['models'])})")
+                text = ""
+                finish_reason = ""
                 try:
-                    result = parse_ai_response(text)
-                except json.JSONDecodeError as e:
-                    print(f"  ⚠️  [{pname}] {model} JSON parse lỗi: {e}")
-                    continue
+                    with hard_timeout(130):
+                        text, finish_reason = caller(model, prompt)
+                    print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
 
-                # Kiểm tra chất lượng
-                arts_vi = result.get("articles_vi", [])
-                en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
-                vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
-                poorly_translated = 0
-                for eid in en_ids_in_subset:
-                    item = vi_lookup.get(eid)
-                    t_vi = (item.get("title_vi") or "").strip() if item else ""
-                    orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
-                    if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
-                        poorly_translated += 1
+                    if finish_reason == "length":
+                        print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
 
-                if len(arts_vi) < subset_count or poorly_translated > 0:
-                    print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
-                    result = retry_ai(pname, model, subset, prompt, result, valid_ids)
+                    try:
+                        result = parse_ai_response(text)
+                    except json.JSONDecodeError as e:
+                        print(f"  ⚠️  [{pname}] {model} JSON parse lỗi: {e}")
+                        break  # JSON lỗi → thử model khác
 
-                result = validate_and_clean_clusters(result, valid_ids)
-                clusters = result.get("clusters", [])
-                trends   = result.get("trends", [])
-                arts_vi  = result.get("articles_vi", [])
-                print(f"  ✅ AI xong ({pname}/{model}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
-                return result
+                    # Kiểm tra chất lượng
+                    arts_vi = result.get("articles_vi", [])
+                    en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
+                    vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
+                    poorly_translated = 0
+                    for eid in en_ids_in_subset:
+                        item = vi_lookup.get(eid)
+                        t_vi = (item.get("title_vi") or "").strip() if item else ""
+                        orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
+                        if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
+                            poorly_translated += 1
 
-            except requests.exceptions.HTTPError as e:
-                status = e.response.status_code if e.response is not None else "?"
-                err_text = str(e)[:120]
+                    if len(arts_vi) < subset_count or poorly_translated > 0:
+                        print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
+                        result = retry_ai(pname, model, subset, prompt, result, valid_ids)
 
-                # 🆕 Xử lý 413: chia batch thành 4 phần (mỗi phần 1-2 bài) để pass Groq
-                if status == 413 and len(subset) > 4:
-                    chunk_size = max(1, len(subset) // 4)
-                    print(f"  ⚠️  [{pname}] {model} 413 Payload Too Large. Chia batch {len(subset)} → chunks {chunk_size}")
-                    chunks = [subset[i:i + chunk_size] for i in range(0, len(subset), chunk_size)]
-                    merged = {
-                        "articles_vi": [],
-                        "clusters":    [],
-                        "trends":      [],
-                        "digest":      {},
-                    }
-                    ok_chunks = 0
-                    for idx, chunk in enumerate(chunks):
-                        r = _process_sub_batch(pname, model, caller, chunk)
-                        if r:
-                            merged["articles_vi"].extend(r.get("articles_vi", []))
-                            merged["clusters"].extend(r.get("clusters", []))
-                            merged["trends"].extend(r.get("trends", []))
-                            if not merged["digest"]:
-                                merged["digest"] = r.get("digest", {})
-                            ok_chunks += 1
-                    if ok_chunks > 0:
-                        merged = validate_and_clean_clusters(
-                            merged,
-                            {a["id"] for a in subset}
-                        )
-                        print(f"  ✅ Gộp {ok_chunks}/{len(chunks)} chunks: {len(merged['articles_vi'])} bài")
-                        return merged
+                    result = validate_and_clean_clusters(result, valid_ids)
+                    clusters = result.get("clusters", [])
+                    trends   = result.get("trends", [])
+                    arts_vi  = result.get("articles_vi", [])
+                    print(f"  ✅ AI xong ({pname}/{model}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
+                    return result
 
-                # 429 rate limit
-                if status == 429:
-                    print(f"  ⚠️  [{pname}] {model} rate limit (429). Chờ 10s...")
-                    time.sleep(10)
-                    continue
+                except requests.exceptions.HTTPError as e:
+                    status = e.response.status_code if e.response is not None else "?"
+                    err_text = str(e)[:120]
 
-                # Các lỗi khác
-                print(f"  ⚠️  [{pname}] {model} HTTP {status}: {err_text}")
-                continue
+                    # 429 rate limit: retry cùng model với exponential backoff
+                    if status == 429:
+                        if retry_attempt < 2:
+                            wait_time = 15 * (retry_attempt + 1)  # 15s, 30s
+                            print(f"  ⚠️  [{pname}] {model} rate limit (429). Chờ {wait_time}s trước khi retry ({retry_attempt+1}/2)...")
+                            time.sleep(wait_time)
+                            continue  # retry cùng model
+                        else:
+                            print(f"  ⚠️  [{pname}] {model} đã retry 2 lần vẫn 429. Chuyển model khác...")
+                            break  # thoát vòng retry, thử model khác
 
-            except Exception as e:
-                print(f"  ⚠️  [{pname}] {model} lỗi: {str(e)[:150]}")
-                continue
+                    # 413 Payload Too Large: chia batch
+                    if status == 413 and len(subset) > 4:
+                        chunk_size = max(1, len(subset) // 4)
+                        print(f"  ⚠️  [{pname}] {model} 413 Payload Too Large. Chia batch {len(subset)} → chunks {chunk_size}")
+                        chunks = [subset[i:i + chunk_size] for i in range(0, len(subset), chunk_size)]
+                        merged = {
+                            "articles_vi": [],
+                            "clusters":    [],
+                            "trends":      [],
+                            "digest":      {},
+                        }
+                        ok_chunks = 0
+                        for idx, chunk in enumerate(chunks):
+                            r = _process_sub_batch(pname, model, caller, chunk)
+                            if r:
+                                merged["articles_vi"].extend(r.get("articles_vi", []))
+                                merged["clusters"].extend(r.get("clusters", []))
+                                merged["trends"].extend(r.get("trends", []))
+                                if not merged["digest"]:
+                                    merged["digest"] = r.get("digest", {})
+                                ok_chunks += 1
+                        if ok_chunks > 0:
+                            merged = validate_and_clean_clusters(
+                                merged,
+                                {a["id"] for a in subset}
+                            )
+                            print(f"  ✅ Gộp {ok_chunks}/{len(chunks)} chunks: {len(merged['articles_vi'])} bài")
+                            return merged
+
+                    # Các lỗi khác
+                    print(f"  ⚠️  [{pname}] {model} HTTP {status}: {err_text}")
+                    break  # thoát vòng retry, thử model khác
+
+                except Exception as e:
+                    print(f"  ⚠️  [{pname}] {model} lỗi: {str(e)[:150]}")
+                    break  # lỗi khác → thử model khác
 
     print(f"  ❌ Tất cả providers/models đều thất bại")
     return fallback_result()
@@ -567,8 +573,9 @@ def process_with_ai(articles):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
+        # Tăng delay từ 1s → 5s để tránh Gemini 429
         if i < len(batches):
-            time.sleep(1)
+            time.sleep(5)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
