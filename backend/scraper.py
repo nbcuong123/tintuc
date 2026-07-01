@@ -496,14 +496,27 @@ def process_with_ai(articles):
         if i == 1:
             digest_result = batch_result.get("digest")
 
-    # Trends: gộp từ nhiều batch rồi lấy lại top 5 theo score
-    merged_trends.sort(key=lambda t: t.get("score", 0), reverse=True)
-    merged_trends = merged_trends[:5]
+    # Trends: gộp từ nhiều batch rồi lấy lại top 5 theo score.
+    # Lọc bỏ phần tử không phải dict — đôi khi AI trả JSON sai format
+    # (vd: trends là list string thay vì list object) khiến .get() crash.
+    valid_trends = [t for t in merged_trends if isinstance(t, dict)]
+    dropped = len(merged_trends) - len(valid_trends)
+    if dropped:
+        print(f"  ⚠️  Loại {dropped} trend không đúng định dạng (không phải object)")
+
+    valid_trends.sort(key=lambda t: t.get("score", 0), reverse=True)
+    merged_trends = valid_trends[:5]
     for idx, t in enumerate(merged_trends, 1):
         t["rank"] = idx
 
     if not digest_result:
         digest_result = fallback_result()["digest"]
+
+    # Lưới an toàn cuối: loại bỏ mọi phần tử không phải dict trong
+    # articles_vi/clusters — phòng trường hợp AI trả JSON sai format
+    # ở bất kỳ batch nào, tránh crash ở các bước xử lý sau (merge, save Firebase).
+    merged_articles_vi = [a for a in merged_articles_vi if isinstance(a, dict) and "id" in a]
+    merged_clusters    = [c for c in merged_clusters if isinstance(c, dict) and "articles" in c]
 
     print(f"  ✅ Tổng hợp {len(batches)} batch: {len(merged_articles_vi)} bài dịch, {len(merged_clusters)} clusters, {len(merged_trends)} trends")
 
