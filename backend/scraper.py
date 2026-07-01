@@ -13,9 +13,12 @@ from firebase_admin import credentials, db
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
+# Chỉ dùng model FREE thật sự (đuôi :free hoặc router free chuyên dụng).
+# "openrouter/auto" và "claude-3-haiku" KHÔNG free — đã gây lỗi 402 Payment Required.
 OPENROUTER_MODELS = [
-    "openrouter/auto",
-    "anthropic/claude-3-haiku",
+    "openrouter/free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "openai/gpt-oss-20b:free",
 ]
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -471,6 +474,11 @@ def process_with_ai(articles):
     for i, batch in enumerate(batches, 1):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
+
+        # Nghỉ giữa các batch để tránh chạm rate limit của free tier
+        # (20 request/phút trên toàn bộ tài khoản OpenRouter free)
+        if i < len(batches):
+            time.sleep(4)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
