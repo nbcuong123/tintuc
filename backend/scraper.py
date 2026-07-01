@@ -2,12 +2,21 @@
 News Digest Scraper + OpenRouter AI Processor (với dịch EN→VI)
 """
 
-import os, json, hashlib, re, time
+import os, json, hashlib, re, time, socket, sys
 import feedparser, requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import firebase_admin
 from firebase_admin import credentials, db
+
+# Timeout mặc định cho MỌI network call (bao gồm feedparser, vốn không có
+# tham số timeout riêng) — tránh script bị treo vô hạn nếu 1 nguồn RSS
+# không phản hồi. 15s là đủ rộng rãi cho RSS feed bình thường.
+socket.setdefaulttimeout(15)
+
+# Ép Python flush output ngay lập tức thay vì buffer — để log GitHub Actions
+# hiển thị real-time thay vì "đứng im" cho tới khi buffer đầy hoặc process kết thúc.
+sys.stdout.reconfigure(line_buffering=True)
 
 # ─── CONFIG ───────────────────────────────────────────────────
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
