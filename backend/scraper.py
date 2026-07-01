@@ -1,6 +1,5 @@
 """
-News Digest Scraper + Multi-Provider AI Processor (với dịch EN→VI)
-Providers: Groq (ưu tiên) → Gemini → OpenRouter
+News Digest Scraper + OpenRouter AI Processor (với dịch EN→VI)
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -10,18 +9,33 @@ from zoneinfo import ZoneInfo
 import firebase_admin
 from firebase_admin import credentials, db
 
+# Timeout mặc định cho MỌI network call (bao gồm feedparser, vốn không có
+# tham số timeout riêng) — tránh script bị treo vô hạn nếu 1 nguồn RSS
+# không phản hồi. 15s là đủ rộng rãi cho RSS feed bình thường.
 socket.setdefaulttimeout(15)
+
+# Ép Python flush output ngay lập tức thay vì buffer — để log GitHub Actions
+# hiển thị real-time thay vì "đứng im" cho tới khi buffer đầy hoặc process kết thúc.
 sys.stdout.reconfigure(line_buffering=True)
 
 
 class WatchdogTimeout(Exception):
+    """Raised khi 1 thao tác vượt quá thời gian cho phép dù requests.timeout không bắt được."""
     pass
 
 
 @contextlib.contextmanager
 def hard_timeout(seconds):
+    """
+    Ngắt cứng ở tầng hệ điều hành (SIGALRM) — đảm bảo TUYỆT ĐỐI không bao giờ
+    treo quá `seconds`, kể cả khi requests/urllib3/DNS bị treo theo cách mà
+    tham số timeout= thông thường không bắt được (edge case hiếm nhưng đã
+    từng xảy ra: workflow treo >5 phút dù đã set timeout=90s).
+    Chỉ hoạt động trên Linux/Unix (GitHub Actions runner ubuntu-latest OK).
+    """
     def _handler(signum, frame):
         raise WatchdogTimeout(f"Vượt quá {seconds}s (watchdog ngắt cứng)")
+
     old_handler = signal.signal(signal.SIGALRM, _handler)
     signal.alarm(seconds)
     try:
@@ -31,42 +45,16 @@ def hard_timeout(seconds):
         signal.signal(signal.SIGALRM, old_handler)
 
 # ─── CONFIG ───────────────────────────────────────────────────
-GROQ_API_KEY       = os.environ.get("GROQ_API_KEY")
-GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+FIREBASE_DB_URL    = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
-
-# 🔑 Thứ tự ưu tiên: Groq (ổn định) → Gemini (fallback) → OpenRouter
-AI_PROVIDERS = []
-if GROQ_API_KEY:
-    AI_PROVIDERS.append({
-        "name":   "groq",
-        "models": [
-            "llama-3.3-70b-versatile",   # ổn định nhất, 30 req/phút
-        ],
-    })
-if GEMINI_API_KEY:
-    AI_PROVIDERS.append({
-        "name":   "gemini",
-        "models": [
-            "gemini-2.5-flash",          # chỉ thử 1 lần, không retry
-        ],
-    })
-if OPENROUTER_API_KEY:
-    AI_PROVIDERS.append({
-        "name":   "openrouter",
-        "models": ["meta-llama/llama-3.3-70b-instruct:free"],
-    })
-
-if not AI_PROVIDERS:
-    raise ValueError(
-        "❌ Chưa cấu hình AI provider nào!\n"
-        "Hãy set ít nhất 1 biến môi trường:\n"
-        "  • GROQ_API_KEY      (khuyến nghị - https://console.groq.com/keys)\n"
-        "  • GEMINI_API_KEY    (https://aistudio.google.com/apikey)\n"
-        "  • OPENROUTER_API_KEY"
-    )
+# Chỉ dùng model FREE thật sự (đuôi :free hoặc router free chuyên dụng).
+# "openrouter/auto" và "claude-3-haiku" KHÔNG free — đã gây lỗi 402 Payment Required.
+OPENROUTER_MODELS = [
+    "openrouter/free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "openai/gpt-oss-20b:free",
+]
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 TODAY = datetime.now(VN_TZ).strftime("%Y-%m-%d")
@@ -89,7 +77,8 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI     = 8
+# Giảm xuống 40 + dùng article_id thay vì index số để AI không "lẫn" khi gán cluster
+MAX_ARTICLES_FOR_AI     = 25  # giảm để model ít nhầm lẫn nội dung giữa các bài trong batch
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -143,12 +132,15 @@ def scrape_all_sources():
 
 
 def balance_languages(articles):
+    """Trộn đều bài VI và EN"""
     vi_articles = [a for a in articles if a["lang"] == "vi"]
     en_articles = [a for a in articles if a["lang"] == "en"]
+
     print(f"  → Balance: {len(vi_articles)} VI, {len(en_articles)} EN")
 
     balanced = []
     vi_idx, en_idx = 0, 0
+
     while vi_idx < len(vi_articles) or en_idx < len(en_articles):
         for _ in range(2):
             if vi_idx < len(vi_articles):
@@ -162,54 +154,72 @@ def balance_languages(articles):
     return balanced
 
 
-# ─── AI PROVIDERS ─────────────────────────────────────────────
+# ─── AI ───────────────────────────────────────────────────────
 def build_prompt(articles):
-    """Prompt tối ưu để tránh hallucination."""
+    """
+    Dùng article_id (string) thay vì số thứ tự để AI không bị lẫn lộn
+    khi gán bài vào cluster — index số dễ "ảo giác" khi batch lớn,
+    còn id duy nhất buộc AI phải copy chính xác từ danh sách đã cho.
+    """
     subset = articles[:MAX_ARTICLES_FOR_AI]
     n = len(subset)
     en_count = sum(1 for a in subset if a.get("lang") == "en")
 
     articles_text = ""
     for a in subset:
-        flag = "EN" if a.get("lang") == "en" else "VI"
-        articles_text += f"\n[{a['id']}|{flag}|{a['cat']}] {a['title']}\n{a['summary'][:80]}\n---"
+        flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
+        articles_text += f"\nID: {a['id']} | {flag} | {a['source']} | {a['cat'].upper()}\nTitle: {a['title']}\nSummary: {a['summary'][:200]}\n---"
 
-    return f"""Biên tập viên tin tức. Trả JSON thuần (không markdown).
-{n} bài ({en_count} EN cần dịch VI). ID là chuỗi 12 ký tự.
+    return f"""Bạn là biên tập viên tin tức cao cấp. Trả về JSON thuần túy (KHÔNG markdown, KHÔNG backtick).
 
-⚠️ CỰC KỲ QUAN TRỌNG: Mỗi summary_vi PHẢI tương ứng với đúng bài có cùng ID. KHÔNG được gán summary của bài này sang bài khác.
+TỔNG: {n} bài, trong đó {en_count} bài 🇬🇧EN CẦN DỊCH sang tiếng Việt.
 
-JSON:
+⚠️ CỰC KỲ QUAN TRỌNG VỀ ID:
+- Mỗi bài có 1 "ID" duy nhất (chuỗi 12 ký tự, ví dụ: a1b2c3d4e5f6)
+- Khi gán bài vào "articles" của 1 cluster, PHẢI copy CHÍNH XÁC chuỗi ID đó, không được tự bịa ID mới, không được dùng ID của bài khác
+- CHỈ dùng ID có trong danh sách dưới đây — TUYỆT ĐỐI không tạo ID không tồn tại
+- 1 cluster chỉ chứa các bài THỰC SỰ cùng chủ đề — không nhét bài không liên quan vào chỉ để cluster có vẻ đầy đủ
+
+JSON format:
 {{
-  "articles_vi": [{{"id": "...", "title_vi": "...", "summary_vi": "2-3 câu chi tiết"}}],
-  "clusters": [{{"topic": "...", "summary": "...", "articles": ["id"], "importance": 8}}],
-  "trends": [{{"rank": 1, "topic": "...", "reason": "...", "category": "economy", "score": 95}}],
+  "articles_vi": [
+    {{"id": "a1b2c3d4e5f6", "title_vi": "...", "summary_vi": "Tóm tắt 2-3 câu nêu rõ: chuyện gì xảy ra, ai liên quan, vì sao đáng chú ý hoặc ảnh hưởng gì"}}
+  ],
+  "clusters": [
+    {{"topic": "Chủ đề", "summary": "Tóm tắt", "articles": ["a1b2c3d4e5f6", "f6e5d4c3b2a1"], "importance": 8}}
+  ],
+  "trends": [
+    {{"rank": 1, "topic": "Xu hướng", "reason": "Lý do", "category": "economy", "score": 95}}
+  ],
   "digest": {{
-    "headline": "...",
-    "overview": "4-6 câu tổng quan",
-    "key_points": ["điểm 1","điểm 2","điểm 3","điểm 4","điểm 5"],
+    "headline": "Tiêu đề tổng kết ấn tượng cho cả ngày",
+    "overview": "Đoạn tổng quan 4-6 câu mô tả bức tranh chung của ngày hôm nay: không khí chung, các mảng tin chính, điều gì đáng chú ý nhất",
+    "key_points": ["Điểm nổi bật 1 (1 câu cụ thể)", "Điểm nổi bật 2", "Điểm nổi bật 3", "Điểm nổi bật 4", "Điểm nổi bật 5", "Điểm nổi bật 6"],
     "topic_groups": [
-      {{"group_name": "Kinh tế - Tài chính", "summary": "2-4 câu"}},
-      {{"group_name": "Xã hội - Đời sống", "summary": "2-4 câu"}},
-      {{"group_name": "Quốc tế", "summary": "2-4 câu"}}
+      {{"group_name": "Kinh tế - Tài chính", "summary": "Đoạn 2-4 câu khái quát diễn biến kinh tế nổi bật, nêu xu hướng chung và 1-2 sự kiện cụ thể quan trọng nhất"}},
+      {{"group_name": "Xã hội - Đời sống", "summary": "Đoạn 2-4 câu về các vấn đề xã hội, đời sống nổi bật"}},
+      {{"group_name": "Quốc tế", "summary": "Đoạn 2-4 câu về tình hình thế giới đáng chú ý"}}
     ]
   }}
 }}
 
-Yêu cầu:
-1. articles_vi: ĐỦ {n} phần tử, id khớp danh sách
-2. VI: title_vi=title gốc, summary_vi viết lại 2-3 câu
-3. EN: DỊCH cả title_vi và summary_vi sang tiếng Việt
-4. clusters: 3-5 nhóm, chỉ chứa ID liên quan thực sự
-5. trends: top 3
+Yêu cầu BẮT BUỘC:
+1. articles_vi: ĐÚNG {n} phần tử, mỗi phần tử có "id" khớp với 1 bài trong danh sách
+2. Bài 🇻🇳VI: title_vi = title gốc, summary_vi PHẢI viết lại thành 2-3 câu chi tiết, diễn giải rõ ràng hơn dựa trên title+summary gốc đã cho (không copy nguyên văn)
+3. Bài 🇬🇧EN: DỊCH title_vi và summary_vi sang tiếng Việt, summary_vi cũng phải 2-3 câu chi tiết
+4. clusters: 5-8 nhóm, mỗi nhóm chỉ chứa ID của bài THỰC SỰ liên quan đến topic đó
+5. trends: top 5
+6. digest.key_points: 5-6 điểm cụ thể, mỗi điểm nêu rõ sự kiện thay vì chung chung
+7. digest.topic_groups: PHẢI có 3-5 nhóm (chỉ chọn nhóm thực sự có tin trong danh sách, ví dụ: Kinh tế - Tài chính, Xã hội - Đời sống, Quốc tế, Công nghệ, Thể thao...), mỗi nhóm có summary riêng dựa trên các bài thuộc nhóm đó
 
-DANH SÁCH ({n} bài):
+DANH SÁCH BÀI ({n} bài, {en_count} EN cần dịch):
 {articles_text}
 
-JSON:"""
+Bắt đầu JSON ngay:"""
 
 
 def repair_json(text):
+    """Sửa JSON bị cắt ngang"""
     text = text.strip()
     text = re.sub(r"^```json\s*", "", text)
     text = re.sub(r"^```\s*",     "", text)
@@ -234,35 +244,48 @@ def repair_json(text):
                 while open_b > close_b:
                     candidate += '}'
                     close_b += 1
+
                 open_sq = candidate.count('[')
                 close_sq = candidate.count(']')
                 while open_sq > close_sq:
                     candidate += ']'
                     close_sq += 1
+
                 return json.loads(candidate)
             except:
                 continue
+
     return None
 
 
 def parse_ai_response(text):
+    """Parse JSON với repair"""
     result = repair_json(text)
     if result:
         return result
+
     text = text.strip()
     text = re.sub(r"^```json\s*", "", text)
     text = re.sub(r"^```\s*",     "", text)
     text = re.sub(r"\s*```$",     "", text)
+
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         text = match.group(0)
+
     return json.loads(text)
 
 
 def validate_and_clean_clusters(result, valid_ids):
+    """
+    Lọc bỏ ID không tồn tại trong danh sách bài đã gửi cho AI.
+    Đây là lưới an toàn cuối — kể cả khi AI vẫn bịa ID, frontend
+    sẽ không bao giờ thấy bài lạc chủ đề trong cluster nữa.
+    """
     clusters = result.get("clusters", [])
     cleaned = []
     dropped_total = 0
+
     for c in clusters:
         ids = c.get("articles", [])
         valid = [i for i in ids if i in valid_ids]
@@ -270,247 +293,135 @@ def validate_and_clean_clusters(result, valid_ids):
         if dropped > 0:
             dropped_total += dropped
             print(f"     ⚠️  Cluster '{c.get('topic','?')}': loại {dropped} ID không hợp lệ")
-        if valid:
+        if valid:  # chỉ giữ cluster còn ít nhất 1 bài hợp lệ
             c["articles"] = valid
             cleaned.append(c)
+
     if dropped_total:
         print(f"  🧹 Tổng cộng đã loại {dropped_total} ID ảo giác khỏi clusters")
+
     result["clusters"] = cleaned
     return result
 
 
-# ─── GỌI TỪNG PROVIDER ────────────────────────────────────────
-def call_groq(model, prompt):
-    """Gọi Groq API"""
-    resp = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type":  "application/json",
-        },
-        json={
-            "model":       model,
-            "messages":    [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
-            "max_tokens":  8000,
-        },
-        timeout=(10, 120),
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    choices = data.get("choices", [])
-    if not choices:
-        raise ValueError("Groq trả về không có choices")
-    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
-
-
-def call_gemini(model, prompt):
-    """Gọi Google Gemini API"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-    resp = requests.post(
-        url,
-        headers={"Content-Type": "application/json"},
-        json={
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 8000,
-                "responseMimeType": "application/json",
-            },
-        },
-        timeout=(10, 120),
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    candidates = data.get("candidates", [])
-    if not candidates:
-        raise ValueError("Gemini trả về không có candidates")
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        raise ValueError("Gemini trả về không có parts")
-    text = parts[0].get("text", "")
-    finish = candidates[0].get("finishReason", "")
-    return text, finish
-
-
-def call_openrouter(model, prompt):
-    """Gọi OpenRouter API"""
-    resp = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type":  "application/json",
-            "HTTP-Referer":  "https://nbcuong123.github.io/tintuc/",
-            "X-Title":       "Tin247 News Digest",
-        },
-        json={
-            "model":       model,
-            "messages":    [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
-            "max_tokens":  8000,
-        },
-        timeout=(10, 120),
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    choices = data.get("choices", [])
-    if not choices:
-        raise ValueError("OpenRouter trả về không có choices")
-    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
-
-
-PROVIDER_CALLERS = {
-    "groq":       call_groq,
-    "gemini":     call_gemini,
-    "openrouter": call_openrouter,
-}
-
-
-def _process_sub_batch(pname, model, caller, sub_articles):
-    """Xử lý 1 sub-batch nhỏ (khi chia nhỏ do 413)."""
-    try:
-        prompt = build_prompt(sub_articles)
-        with hard_timeout(130):
-            text, finish_reason = caller(model, prompt)
-        print(f"     → Sub-batch {len(sub_articles)} bài: {len(text)} chars")
-        result = parse_ai_response(text)
-        return result
-    except Exception as e:
-        print(f"     ❌ Sub-batch lỗi: {e}")
-        return None
-
-
 def process_batch_with_ai(batch_articles, batch_label=""):
-    """Xử lý 1 batch - Groq ưu tiên, Gemini chỉ thử 1 lần."""
-    print(f"  → Gọi AI{batch_label}...")
+    """Xử lý 1 batch (tối đa MAX_ARTICLES_FOR_AI bài) qua AI."""
+    print(f"  → Gọi OpenRouter AI{batch_label}...")
+    prompt = build_prompt(batch_articles)
     subset = batch_articles[:MAX_ARTICLES_FOR_AI]
+    subset_count = len(subset)
     valid_ids = {a["id"] for a in subset}
 
-    prompt = build_prompt(subset)
-    subset_count = len(subset)
+    for model_idx, model in enumerate(OPENROUTER_MODELS):
+        print(f"  → Thử model [{model_idx+1}/{len(OPENROUTER_MODELS)}]: {model} (timeout tối đa 90s)")
 
-    for provider in AI_PROVIDERS:
-        pname = provider["name"]
-        caller = PROVIDER_CALLERS[pname]
+        resp = None
+        text = ""
+        try:
+            with hard_timeout(100):  # ngắt cứng dự phòng, rộng hơn timeout requests 1 chút
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type":  "application/json",
+                        "HTTP-Referer":  "https://nbcuong123.github.io/tintuc/",
+                        "X-Title":       "Tin247 News Digest",
+                    },
+                    json={
+                        "model":       model,
+                        "messages":    [{"role": "user", "content": prompt}],
+                        "temperature": 0.2,
+                        "max_tokens":  16000,
+                    },
+                    timeout=(10, 90),  # (connect, read) — tách riêng để bắt được cả trường hợp treo lúc kết nối/DNS
+                )
 
-        for model_idx, model in enumerate(provider["models"]):
-            # Gemini: chỉ thử 1 lần, không retry (vì free tier quá hạn chế)
-            # Groq/OpenRouter: retry 2 lần cho 429
-            max_retries = 1 if pname == "gemini" else 3
-            
-            for retry_attempt in range(max_retries):
-                print(f"  → Thử [{pname}] {model} ({model_idx+1}/{len(provider['models'])})")
-                text = ""
-                finish_reason = ""
-                try:
-                    with hard_timeout(130):
-                        text, finish_reason = caller(model, prompt)
-                    print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
+            if resp.status_code == 429:
+                print(f"  ⚠️  Model {model} rate limit (429). Thử model khác...")
+                time.sleep(3)
+                continue
 
-                    if finish_reason == "length":
-                        print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
+            if resp.status_code == 404:
+                print(f"  ⚠️  Model {model} không tồn tại (404). Thử model khác...")
+                continue
 
-                    try:
-                        result = parse_ai_response(text)
-                    except json.JSONDecodeError as e:
-                        print(f"  ⚠️  [{pname}] {model} JSON parse lỗi: {e}")
-                        break
+            resp.raise_for_status()
 
-                    # Kiểm tra chất lượng
-                    arts_vi = result.get("articles_vi", [])
-                    en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
-                    vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
-                    poorly_translated = 0
-                    for eid in en_ids_in_subset:
-                        item = vi_lookup.get(eid)
-                        t_vi = (item.get("title_vi") or "").strip() if item else ""
-                        orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
-                        if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
-                            poorly_translated += 1
+            data = resp.json()
+            choices = data.get("choices", [])
+            if not choices:
+                print(f"  ⚠️  Model {model} không có choices. Thử model khác...")
+                continue
 
-                    if len(arts_vi) < subset_count or poorly_translated > 0:
-                        print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
-                        result = retry_ai(pname, model, subset, prompt, result, valid_ids)
+            choice = choices[0]
+            finish_reason = choice.get("finish_reason")
 
-                    result = validate_and_clean_clusters(result, valid_ids)
-                    clusters = result.get("clusters", [])
-                    trends   = result.get("trends", [])
-                    arts_vi  = result.get("articles_vi", [])
-                    print(f"  ✅ AI xong ({pname}/{model}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
-                    return result
+            if finish_reason == "error":
+                err = choice.get("error", {})
+                print(f"  ⚠️  Model {model} lỗi: {err.get('message', 'Unknown')}. Thử model khác...")
+                continue
 
-                except requests.exceptions.HTTPError as e:
-                    status = e.response.status_code if e.response is not None else "?"
-                    err_text = str(e)[:120]
+            text = choice["message"]["content"]
+            print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
 
-                    # 429 rate limit
-                    if status == 429:
-                        if pname == "gemini":
-                            # Gemini: không retry, chuyển model khác ngay
-                            print(f"  ⚠️  [{pname}] {model} rate limit (429). Chuyển model khác...")
-                            break
-                        else:
-                            # Groq/OpenRouter: retry với backoff
-                            if retry_attempt < max_retries - 1:
-                                wait_time = 10 * (retry_attempt + 1)
-                                print(f"  ⚠️  [{pname}] {model} rate limit (429). Chờ {wait_time}s...")
-                                time.sleep(wait_time)
-                                continue
-                            else:
-                                print(f"  ⚠️  [{pname}] {model} đã retry {max_retries-1} lần vẫn 429. Chuyển model khác...")
-                                break
+            if finish_reason == "length":
+                print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
 
-                    # 413 Payload Too Large: chia batch
-                    if status == 413 and len(subset) > 4:
-                        chunk_size = max(1, len(subset) // 4)
-                        print(f"  ⚠️  [{pname}] {model} 413 Payload Too Large. Chia batch {len(subset)} → chunks {chunk_size}")
-                        chunks = [subset[i:i + chunk_size] for i in range(0, len(subset), chunk_size)]
-                        merged = {
-                            "articles_vi": [],
-                            "clusters":    [],
-                            "trends":      [],
-                            "digest":      {},
-                        }
-                        ok_chunks = 0
-                        for idx, chunk in enumerate(chunks):
-                            r = _process_sub_batch(pname, model, caller, chunk)
-                            if r:
-                                merged["articles_vi"].extend(r.get("articles_vi", []))
-                                merged["clusters"].extend(r.get("clusters", []))
-                                merged["trends"].extend(r.get("trends", []))
-                                if not merged["digest"]:
-                                    merged["digest"] = r.get("digest", {})
-                                ok_chunks += 1
-                        if ok_chunks > 0:
-                            merged = validate_and_clean_clusters(
-                                merged,
-                                {a["id"] for a in subset}
-                            )
-                            print(f"  ✅ Gộp {ok_chunks}/{len(chunks)} chunks: {len(merged['articles_vi'])} bài")
-                            return merged
+            try:
+                result = parse_ai_response(text)
+            except json.JSONDecodeError as e:
+                print(f"  ⚠️  Model {model} JSON parse lỗi: {e}")
+                print(f"  Response (đầu): {text[:300]}")
+                continue
 
-                    # Các lỗi khác
-                    print(f"  ⚠️  [{pname}] {model} HTTP {status}: {err_text}")
-                    break
+            arts_vi = result.get("articles_vi", [])
+            # Kiểm tra cả số lượng LẪN chất lượng dịch — AI có thể trả đủ
+            # số phần tử nhưng để title_vi rỗng/trùng title gốc cho các bài
+            # cuối batch khi xử lý nhiều bài cùng lúc.
+            en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
+            vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
+            poorly_translated = 0
+            for eid in en_ids_in_subset:
+                item = vi_lookup.get(eid)
+                t_vi = (item.get("title_vi") or "").strip() if item else ""
+                orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
+                if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
+                    poorly_translated += 1
 
-                except Exception as e:
-                    print(f"  ⚠️  [{pname}] {model} lỗi: {str(e)[:150]}")
-                    break
+            if len(arts_vi) < subset_count or poorly_translated > 0:
+                print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
+                result = retry_ai(subset, prompt, result, valid_ids)
 
-    print(f"  ❌ Tất cả providers/models đều thất bại")
+            # Lưới an toàn: loại bỏ mọi ID không có thật trước khi lưu
+            result = validate_and_clean_clusters(result, valid_ids)
+
+            clusters = result.get("clusters", [])
+            trends   = result.get("trends", [])
+            arts_vi  = result.get("articles_vi", [])
+            print(f"  ✅ AI xong ({model}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
+            return result
+
+        except requests.exceptions.HTTPError as e:
+            print(f"  ⚠️  Model {model} HTTP lỗi: {e}")
+            continue
+        except Exception as e:
+            print(f"  ⚠️  Model {model} lỗi: {e}")
+            continue
+
+    print(f"  ❌ Tất cả {len(OPENROUTER_MODELS)} models đều thất bại")
     return fallback_result()
 
 
-def retry_ai(provider_name, model, subset, original_prompt, partial_result, valid_ids):
-    """Retry bổ sung các bài còn thiếu/dịch kém"""
+def retry_ai(subset, original_prompt, partial_result, valid_ids):
     print("  → Retry bổ sung...")
     arts_vi = partial_result.get("articles_vi", [])
     vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
 
+    # Lấy cả bài THIẾU lẫn bài có mặt nhưng DỊCH KÉM (title_vi rỗng/trùng gốc)
     missing = []
     for a in subset:
         if a.get("lang") != "en":
-            continue
+            continue  # chỉ cần retry bài tiếng Anh, bài VI không cần dịch
         item = vi_lookup.get(a["id"])
         t_vi = (item.get("title_vi") or "").strip() if item else ""
         if not t_vi or t_vi == a["title"] or len(t_vi) <= 5:
@@ -521,21 +432,37 @@ def retry_ai(provider_name, model, subset, original_prompt, partial_result, vali
 
     missing_text = ""
     for a in missing:
-        flag = "EN" if a.get("lang") == "en" else "VI"
-        missing_text += f"\n[{a['id']}|{flag}] {a['title']}\n{a['summary'][:80]}\n---"
+        flag = "🇬🇧EN" if a.get("lang") == "en" else "🇻🇳VI"
+        missing_text += f"\nID: {a['id']} | {flag} | {a['source']}\nTitle: {a['title']}\nSummary: {a['summary'][:150]}\n---"
 
-    retry_prompt = f"""Bổ sung {len(missing)} bài còn thiếu. Dùng đúng ID:
+    retry_prompt = f"""Bổ sung {len(missing)} bài còn thiếu. Dùng đúng ID đã cho, không bịa ID mới:
 
 {missing_text}
 
 JSON: {{"articles_vi": [{{"id": "...", "title_vi": "...", "summary_vi": "..."}}]}}
 
-JSON:"""
+Bắt đầu JSON:"""
 
-    caller = PROVIDER_CALLERS[provider_name]
     try:
-        with hard_timeout(130):
-            text, _ = caller(model, retry_prompt)
+        with hard_timeout(100):
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type":  "application/json",
+                    "HTTP-Referer":  "https://nbcuong123.github.io/tintuc/",
+                    "X-Title":       "Tin247 News Digest",
+                },
+                json={
+                    "model":       OPENROUTER_MODELS[0],
+                    "messages":    [{"role": "user", "content": retry_prompt}],
+                    "temperature": 0.1,
+                    "max_tokens":  8000,
+                },
+                timeout=(10, 90),  # giảm từ 180s và tách connect/read timeout cho nhất quán
+            )
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"]
         retry_data = parse_ai_response(text)
 
         existing = {a["id"]: a for a in partial_result.get("articles_vi", []) if "id" in a}
@@ -566,6 +493,12 @@ def fallback_result():
 
 
 def process_with_ai(articles):
+    """
+    Chia toàn bộ articles thành nhiều batch (mỗi batch tối đa
+    MAX_ARTICLES_FOR_AI bài) và gọi AI tuần tự cho từng batch,
+    sau đó gộp kết quả lại — đảm bảo MỌI bài đều được dịch/cluster,
+    không chỉ riêng batch đầu tiên như trước đây.
+    """
     total = len(articles)
     batches = [articles[i:i + MAX_ARTICLES_FOR_AI] for i in range(0, total, MAX_ARTICLES_FOR_AI)]
     print(f"  → Tổng {total} bài, chia thành {len(batches)} batch (mỗi batch ≤{MAX_ARTICLES_FOR_AI} bài)")
@@ -573,15 +506,16 @@ def process_with_ai(articles):
     merged_articles_vi = []
     merged_clusters = []
     merged_trends = []
-    digest_result = None
+    digest_result = None  # digest tổng kết chỉ lấy từ batch đầu tiên
 
     for i, batch in enumerate(batches, 1):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
-        # Delay 3s giữa các batch (đủ cho Groq, không cần chờ Gemini)
+        # Nghỉ giữa các batch để tránh chạm rate limit của free tier
+        # (20 request/phút trên toàn bộ tài khoản OpenRouter free)
         if i < len(batches):
-            time.sleep(3)
+            time.sleep(4)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
@@ -590,10 +524,14 @@ def process_with_ai(articles):
         if i == 1:
             digest_result = batch_result.get("digest")
 
+    # Trends: gộp từ nhiều batch rồi lấy lại top 5 theo score.
+    # Lọc bỏ phần tử không phải dict — đôi khi AI trả JSON sai format
+    # (vd: trends là list string thay vì list object) khiến .get() crash.
     valid_trends = [t for t in merged_trends if isinstance(t, dict)]
     dropped = len(merged_trends) - len(valid_trends)
     if dropped:
-        print(f"  ⚠️  Loại {dropped} trend không đúng định dạng")
+        print(f"  ⚠️  Loại {dropped} trend không đúng định dạng (không phải object)")
+
     valid_trends.sort(key=lambda t: t.get("score", 0), reverse=True)
     merged_trends = valid_trends[:5]
     for idx, t in enumerate(merged_trends, 1):
@@ -602,6 +540,9 @@ def process_with_ai(articles):
     if not digest_result:
         digest_result = fallback_result()["digest"]
 
+    # Lưới an toàn cuối: loại bỏ mọi phần tử không phải dict trong
+    # articles_vi/clusters — phòng trường hợp AI trả JSON sai format
+    # ở bất kỳ batch nào, tránh crash ở các bước xử lý sau (merge, save Firebase).
     merged_articles_vi = [a for a in merged_articles_vi if isinstance(a, dict) and "id" in a]
     merged_clusters    = [c for c in merged_clusters if isinstance(c, dict) and "articles" in c]
 
@@ -617,6 +558,14 @@ def process_with_ai(articles):
 
 # ─── VALIDATE TRANSLATION MATCH ───────────────────────────────
 def extract_signature_tokens(text):
+    """
+    Trích các 'dấu vân tay' của văn bản: số (tiền, %, năm...) và
+    cụm chữ viết hoa liên tiếp (tên riêng, địa danh, tổ chức).
+    Đây là những thứ PHẢI xuất hiện giống nhau giữa bản gốc và bản
+    dịch dù khác ngôn ngữ — nếu summary_vi của 1 bài có dấu vân tay
+    hoàn toàn khác với title/summary gốc của chính bài đó, khả năng
+    cao AI đã gán nhầm nội dung từ bài khác.
+    """
     if not text:
         return set()
     numbers = set(re.findall(r"\d[\d.,]*", text))
@@ -625,9 +574,15 @@ def extract_signature_tokens(text):
 
 
 def translation_looks_mismatched(orig_title, orig_summary, t_vi, s_vi):
+    """
+    Trả về True nếu bản dịch có dấu hiệu bị gán nhầm sang nội dung
+    của bài khác (không có điểm chung nào về số liệu/tên riêng với
+    bài gốc, trong khi bài gốc CÓ chứa các dấu vân tay đó).
+    """
     orig_sig = extract_signature_tokens(orig_title + " " + orig_summary)
     if not orig_sig:
-        return False
+        return False  # bài gốc không có gì đặc trưng để đối chiếu, bỏ qua check này
+
     vi_sig = extract_signature_tokens(t_vi + " " + s_vi)
     overlap = orig_sig & vi_sig
     return len(overlap) == 0
@@ -635,7 +590,9 @@ def translation_looks_mismatched(orig_title, orig_summary, t_vi, s_vi):
 
 # ─── MERGE TRANSLATIONS ────────────────────────────────────────
 def merge_translations(articles, ai_result):
+    """Gộp bản dịch AI - match theo article id (string), không dùng số thứ tự"""
     arts_vi = ai_result.get("articles_vi", [])
+
     lookup = {item["id"]: item for item in arts_vi if "id" in item}
 
     print(f"  🔍 DEBUG: AI trả về {len(lookup)} bản dịch")
@@ -649,6 +606,7 @@ def merge_translations(articles, ai_result):
         if a["lang"] == "en":
             en_total += 1
             vi = lookup.get(a["id"], {})
+
             t_vi = (vi.get("title_vi") or "").strip()
             s_vi = (vi.get("summary_vi") or "").strip()
 
@@ -659,7 +617,7 @@ def merge_translations(articles, ai_result):
 
             mismatched = translation_looks_mismatched(a["title"], a["summary"], t_vi, s_vi)
             if mismatched and en_total <= 10:
-                print(f"     ⚠️  Nghi ngờ gán nhầm nội dung")
+                print(f"     ⚠️  Nghi ngờ gán nhầm nội dung (không có điểm chung số/tên riêng)")
 
             if t_vi and t_vi != a["title"] and len(t_vi) > 5 and not mismatched:
                 a["title_vi"] = t_vi
@@ -675,13 +633,15 @@ def merge_translations(articles, ai_result):
             a["title_vi"] = a["title"]
             vi = lookup.get(a["id"], {})
             s_vi = (vi.get("summary_vi") or "").strip()
+            # Bài VI gốc: chỉ chấp nhận summary_vi của AI nếu nó thực sự liên quan
+            # đến bài này (đối chiếu số/tên riêng), nếu không thì giữ summary gốc
             if s_vi and not translation_looks_mismatched(a["title"], a["summary"], a["title"], s_vi):
                 a["summary_vi"] = s_vi
             else:
                 a["summary_vi"] = a["summary"]
 
     mismatch_count = sum(1 for item in en_missing_details if item.get("reason") == "mismatched")
-    print(f"  📊 Dịch EN→VI: {en_translated}/{en_total} bài (fallback: {en_fallback}, trong đó {mismatch_count} bị nghi gán nhầm)")
+    print(f"  📊 Dịch EN→VI: {en_translated}/{en_total} bài (fallback: {en_fallback}, trong đó {mismatch_count} bị nghi gán nhầm nội dung)")
     if en_fallback > 0:
         print(f"  ⚠️  {en_fallback} bài EN thiếu/nghi nhầm:")
         for item in en_missing_details[:5]:
@@ -692,6 +652,7 @@ def merge_translations(articles, ai_result):
 
 # ─── GOOGLE TRENDS ────────────────────────────────────────────
 def fetch_google_trends():
+    """Lấy top trending từ Google Trends RSS"""
     print("  → Fetch Google Trends VN...")
     try:
         import xml.etree.ElementTree as ET
@@ -728,11 +689,14 @@ def fetch_google_trends():
 
 # ─── YOUTUBE TRENDING ─────────────────────────────────────────
 def fetch_youtube_trending():
+    """Lấy YouTube Trending VN qua YouTube Data API"""
     print("  → Fetch YouTube Trending VN...")
+
     YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
     if not YOUTUBE_API_KEY:
         print("     ⚠️  Không có YOUTUBE_API_KEY. Bỏ qua.")
         return []
+
     try:
         resp = requests.get(
             "https://www.googleapis.com/youtube/v3/videos",
@@ -745,6 +709,7 @@ def fetch_youtube_trending():
             },
             timeout=15,
         )
+
         if resp.status_code == 200:
             data = resp.json()
             items = []
@@ -760,6 +725,7 @@ def fetch_youtube_trending():
                     "viewCount": int(stats.get("viewCount", 0)),
                     "url":       f"https://www.youtube.com/watch?v={v.get('id','')}",
                 })
+
             if items:
                 print(f"     ✅ {len(items)} videos")
                 return items
@@ -767,6 +733,7 @@ def fetch_youtube_trending():
             print(f"     ⚠️  YouTube API: HTTP {resp.status_code}")
     except Exception as e:
         print(f"     ⚠️  YouTube API lỗi: {e}")
+
     return []
 
 
@@ -783,6 +750,7 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
     for a in articles:
         t_vi = a.get("title_vi", "")
         s_vi = a.get("summary_vi", "")
+
         if a["id"] not in existing:
             ref.child(f"articles/{TODAY}/{a['id']}").set(a)
             new_count += 1
@@ -822,17 +790,7 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
 def main():
     print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
-    print("🔑 API keys status:")
-    for key in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"]:
-        val = os.environ.get(key)
-        status = f"✅ có ({len(val)} ký tự)" if val else "❌ KHÔNG CÓ"
-        print(f"   • {key}: {status}")
-
-    print("\n🔌 AI providers đã cấu hình (theo thứ tự ưu tiên):")
-    for p in AI_PROVIDERS:
-        print(f"   • {p['name']}: {len(p['models'])} models")
-
-    print("\n1️⃣  Init Firebase...")
+    print("1️⃣  Init Firebase...")
     ref = init_firebase()
 
     print("\n2️⃣  Scraping RSS...")
