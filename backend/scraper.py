@@ -1,6 +1,6 @@
 """
 News Digest Scraper + Multi-Provider AI Processor (với dịch EN→VI)
-Providers: Groq (free) → Gemini (free) → OpenRouter (free models)
+Providers: Gemini (free, ưu tiên) → Groq → OpenRouter
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -37,24 +37,24 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# Cấu hình provider theo thứ tự ưu tiên
+# 🔑 Thứ tự ưu tiên: Gemini → Groq → OpenRouter
+# Gemini miễn phí rộng rãi nhất (1M tokens input, 1500 req/ngày)
 AI_PROVIDERS = []
-if GROQ_API_KEY:
-    AI_PROVIDERS.append({
-        "name":   "groq",
-        "models": [
-            "llama-3.3-70b-versatile",   # nhanh, chất lượng tốt
-            "llama-3.1-8b-instant",      # siêu nhanh, chất lượng vừa
-            "qwen/qwen3-32b",            # thay mixtral đã bị khai tử
-        ],
-    })
 if GEMINI_API_KEY:
     AI_PROVIDERS.append({
         "name":   "gemini",
         "models": [
-            "gemini-2.5-flash",          # mới nhất, nhanh, thông minh
-            "gemini-2.5-flash-lite",     # miễn phí, nhanh
+            "gemini-2.5-flash-lite",     # miễn phí, cực nhanh, 1M tokens
+            "gemini-2.5-flash",          # mới nhất, thông minh hơn
             "gemini-2.0-flash",          # ổn định
+        ],
+    })
+if GROQ_API_KEY:
+    AI_PROVIDERS.append({
+        "name":   "groq",
+        "models": [
+            "llama-3.1-8b-instant",      # nhỏ nhất, dễ pass Groq 413
+            "llama-3.3-70b-versatile",
         ],
     })
 if OPENROUTER_API_KEY:
@@ -66,10 +66,10 @@ if OPENROUTER_API_KEY:
 if not AI_PROVIDERS:
     raise ValueError(
         "❌ Chưa cấu hình AI provider nào!\n"
-        "Hãy set ít nhất 1 trong các biến môi trường sau:\n"
-        "  • GROQ_API_KEY      (khuyến nghị - miễn phí tại https://console.groq.com/keys)\n"
-        "  • GEMINI_API_KEY    (miễn phí tại https://aistudio.google.com/apikey)\n"
-        "  • OPENROUTER_API_KEY (cần nạp credit)"
+        "Hãy set ít nhất 1 biến môi trường:\n"
+        "  • GEMINI_API_KEY    (khuyến nghị - https://aistudio.google.com/apikey)\n"
+        "  • GROQ_API_KEY      (https://console.groq.com/keys)\n"
+        "  • OPENROUTER_API_KEY"
     )
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -93,8 +93,8 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-# Groq free tier giới hạn payload ~10KB/request → giảm xuống 12 bài/batch
-MAX_ARTICLES_FOR_AI     = 12
+# Groq free tier rất hẹp → 6 bài/batch là an toàn nhất
+MAX_ARTICLES_FOR_AI     = 6
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -169,7 +169,7 @@ def balance_languages(articles):
 
 # ─── AI PROVIDERS ─────────────────────────────────────────────
 def build_prompt(articles):
-    """Prompt gọn hơn để tránh Groq 413 Payload Too Large."""
+    """Prompt siêu gọn để tránh Groq 413."""
     subset = articles[:MAX_ARTICLES_FOR_AI]
     n = len(subset)
     en_count = sum(1 for a in subset if a.get("lang") == "en")
@@ -177,22 +177,21 @@ def build_prompt(articles):
     articles_text = ""
     for a in subset:
         flag = "EN" if a.get("lang") == "en" else "VI"
-        # Rút gọn summary xuống 120 chars để giảm payload
-        articles_text += f"\n[{a['id']}|{flag}|{a['source']}|{a['cat']}] {a['title']}\n{a['summary'][:120]}\n---"
+        # Chỉ giữ 80 chars summary - đủ để AI hiểu context
+        articles_text += f"\n[{a['id']}|{flag}|{a['cat']}] {a['title']}\n{a['summary'][:80]}\n---"
 
-    return f"""Biên tập viên tin tức. Trả JSON thuần (KHÔNG markdown).
-
-{n} bài ({en_count} EN cần dịch VI). ID là chuỗi 12 ký tự - CHỈ dùng ID có trong danh sách, không bịa.
+    return f"""Biên tập viên tin tức. Trả JSON thuần (không markdown).
+{n} bài ({en_count} EN cần dịch VI). ID là chuỗi 12 ký tự - CHỈ dùng ID có trong danh sách.
 
 JSON:
 {{
   "articles_vi": [{{"id": "...", "title_vi": "...", "summary_vi": "2-3 câu chi tiết"}}],
-  "clusters": [{{"topic": "...", "summary": "...", "articles": ["id1","id2"], "importance": 8}}],
+  "clusters": [{{"topic": "...", "summary": "...", "articles": ["id"], "importance": 8}}],
   "trends": [{{"rank": 1, "topic": "...", "reason": "...", "category": "economy", "score": 95}}],
   "digest": {{
-    "headline": "Tiêu đề ấn tượng",
+    "headline": "...",
     "overview": "4-6 câu tổng quan",
-    "key_points": ["điểm 1","điểm 2","điểm 3","điểm 4","điểm 5","điểm 6"],
+    "key_points": ["điểm 1","điểm 2","điểm 3","điểm 4","điểm 5"],
     "topic_groups": [
       {{"group_name": "Kinh tế - Tài chính", "summary": "2-4 câu"}},
       {{"group_name": "Xã hội - Đời sống", "summary": "2-4 câu"}},
@@ -205,9 +204,8 @@ Yêu cầu:
 1. articles_vi: ĐỦ {n} phần tử, id khớp danh sách
 2. VI: title_vi=title gốc, summary_vi viết lại 2-3 câu
 3. EN: DỊCH cả title_vi và summary_vi sang tiếng Việt
-4. clusters: 5-8 nhóm, chỉ chứa ID liên quan thực sự
-5. trends: top 5
-6. digest: đầy đủ các trường
+4. clusters: 3-5 nhóm, chỉ chứa ID liên quan thực sự
+5. trends: top 3
 
 DANH SÁCH ({n} bài):
 {articles_text}
@@ -287,7 +285,7 @@ def validate_and_clean_clusters(result, valid_ids):
 
 # ─── GỌI TỪNG PROVIDER ────────────────────────────────────────
 def call_groq(model, prompt):
-    """Gọi Groq API (tương thích OpenAI format)"""
+    """Gọi Groq API"""
     resp = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={
@@ -298,7 +296,7 @@ def call_groq(model, prompt):
             "model":       model,
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
-            "max_tokens":  16000,
+            "max_tokens":  8000,  # giảm từ 16000 để tránh 413
         },
         timeout=(10, 120),
     )
@@ -320,7 +318,7 @@ def call_gemini(model, prompt):
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 16000,
+                "maxOutputTokens": 8000,
                 "responseMimeType": "application/json",
             },
         },
@@ -353,7 +351,7 @@ def call_openrouter(model, prompt):
             "model":       model,
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
-            "max_tokens":  16000,
+            "max_tokens":  8000,
         },
         timeout=(10, 120),
     )
@@ -373,7 +371,7 @@ PROVIDER_CALLERS = {
 
 
 def _process_sub_batch(pname, model, caller, sub_articles):
-    """Xử lý 1 sub-batch nhỏ (khi chia đôi do 413)."""
+    """Xử lý 1 sub-batch nhỏ (khi chia nhỏ do 413)."""
     try:
         prompt = build_prompt(sub_articles)
         with hard_timeout(130):
@@ -444,35 +442,42 @@ def process_batch_with_ai(batch_articles, batch_label=""):
                 status = e.response.status_code if e.response is not None else "?"
                 err_text = str(e)[:120]
 
-                # 🆕 Xử lý đặc biệt cho 413: tự động chia batch và retry
-                if status == 413 and len(subset) > 6:
-                    half = len(subset) // 2
-                    print(f"  ⚠️  [{pname}] {model} 413 Payload Too Large. Chia batch {len(subset)} → 2 batch {half}+{len(subset)-half}")
-                    part1 = subset[:half]
-                    part2 = subset[half:]
-                    r1 = _process_sub_batch(pname, model, caller, part1)
-                    r2 = _process_sub_batch(pname, model, caller, part2)
-                    if r1 and r2:
-                        merged = {
-                            "articles_vi": r1.get("articles_vi", []) + r2.get("articles_vi", []),
-                            "clusters":    r1.get("clusters", []) + r2.get("clusters", []),
-                            "trends":      r1.get("trends", []) + r2.get("trends", []),
-                            "digest":      r1.get("digest") or r2.get("digest") or {},
-                        }
+                # 🆕 Xử lý 413: chia batch thành 4 phần (mỗi phần 1-2 bài) để pass Groq
+                if status == 413 and len(subset) > 4:
+                    chunk_size = max(1, len(subset) // 4)
+                    print(f"  ⚠️  [{pname}] {model} 413 Payload Too Large. Chia batch {len(subset)} → chunks {chunk_size}")
+                    chunks = [subset[i:i + chunk_size] for i in range(0, len(subset), chunk_size)]
+                    merged = {
+                        "articles_vi": [],
+                        "clusters":    [],
+                        "trends":      [],
+                        "digest":      {},
+                    }
+                    ok_chunks = 0
+                    for idx, chunk in enumerate(chunks):
+                        r = _process_sub_batch(pname, model, caller, chunk)
+                        if r:
+                            merged["articles_vi"].extend(r.get("articles_vi", []))
+                            merged["clusters"].extend(r.get("clusters", []))
+                            merged["trends"].extend(r.get("trends", []))
+                            if not merged["digest"]:
+                                merged["digest"] = r.get("digest", {})
+                            ok_chunks += 1
+                    if ok_chunks > 0:
                         merged = validate_and_clean_clusters(
                             merged,
                             {a["id"] for a in subset}
                         )
-                        print(f"  ✅ Gộp 2 batch: {len(merged['articles_vi'])} bài")
+                        print(f"  ✅ Gộp {ok_chunks}/{len(chunks)} chunks: {len(merged['articles_vi'])} bài")
                         return merged
 
-                # 429 rate limit: chờ rồi retry cùng model
+                # 429 rate limit
                 if status == 429:
                     print(f"  ⚠️  [{pname}] {model} rate limit (429). Chờ 10s...")
                     time.sleep(10)
                     continue
 
-                # Các lỗi khác → thử model khác
+                # Các lỗi khác
                 print(f"  ⚠️  [{pname}] {model} HTTP {status}: {err_text}")
                 continue
 
@@ -505,9 +510,9 @@ def retry_ai(provider_name, model, subset, original_prompt, partial_result, vali
     missing_text = ""
     for a in missing:
         flag = "EN" if a.get("lang") == "en" else "VI"
-        missing_text += f"\n[{a['id']}|{flag}|{a['source']}] {a['title']}\n{a['summary'][:100]}\n---"
+        missing_text += f"\n[{a['id']}|{flag}] {a['title']}\n{a['summary'][:80]}\n---"
 
-    retry_prompt = f"""Bổ sung {len(missing)} bài còn thiếu. Dùng đúng ID đã cho:
+    retry_prompt = f"""Bổ sung {len(missing)} bài còn thiếu. Dùng đúng ID:
 
 {missing_text}
 
@@ -563,7 +568,7 @@ def process_with_ai(articles):
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
         if i < len(batches):
-            time.sleep(2)
+            time.sleep(1)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
@@ -804,14 +809,13 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
 def main():
     print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
-    # 🔍 DEBUG API keys
     print("🔑 API keys status:")
     for key in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"]:
         val = os.environ.get(key)
         status = f"✅ có ({len(val)} ký tự)" if val else "❌ KHÔNG CÓ"
         print(f"   • {key}: {status}")
 
-    print("\n🔌 AI providers đã cấu hình:")
+    print("\n🔌 AI providers đã cấu hình (theo thứ tự ưu tiên):")
     for p in AI_PROVIDERS:
         print(f"   • {p['name']}: {len(p['models'])} models")
 
