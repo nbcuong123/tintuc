@@ -287,7 +287,7 @@ def process_batch_with_ai(batch_articles, batch_label=""):
     valid_ids = {a["id"] for a in subset}
 
     for model_idx, model in enumerate(OPENROUTER_MODELS):
-        print(f"  → Thử model [{model_idx+1}/{len(OPENROUTER_MODELS)}]: {model}")
+        print(f"  → Thử model [{model_idx+1}/{len(OPENROUTER_MODELS)}]: {model} (timeout tối đa 90s)")
 
         resp = None
         text = ""
@@ -306,7 +306,7 @@ def process_batch_with_ai(batch_articles, batch_label=""):
                     "temperature": 0.2,
                     "max_tokens":  16000,
                 },
-                timeout=240,
+                timeout=90,  # giảm từ 240s để fail nhanh, chuyển model dự phòng thay vì treo lâu
             )
 
             if resp.status_code == 429:
