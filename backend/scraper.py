@@ -34,6 +34,8 @@ RSS_SOURCES = [
     {"name": "BBC World",        "lang": "en", "cat": "world",   "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
     {"name": "BBC Business",     "lang": "en", "cat": "economy", "url": "https://feeds.bbci.co.uk/news/business/rss.xml"},
     {"name": "CNBC Economy",     "lang": "en", "cat": "economy", "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html"},
+    {"name": "Man Utd Official", "lang": "en", "cat": "mu",      "url": "https://www.manutd.com/Feeds/NewsSecondRSSFeed"},
+    {"name": "Football365 MU",   "lang": "en", "cat": "mu",      "url": "https://www.football365.com/manchester-united/rss2"},
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
