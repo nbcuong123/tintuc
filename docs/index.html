@@ -107,6 +107,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .fbtn.vn.on  { background:#4f8ef7; border-color:#4f8ef7; }
 .fbtn.wo.on  { background:#a04ff7; border-color:#a04ff7; }
 .fbtn.ec.on  { background:#f7a94f; border-color:#f7a94f; color:#000; }
+.fbtn.mu.on  { background:#da291c; border-color:#da291c; }
 
 .cl-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:10px; transition:.2s; }
 .cl-card:hover { border-color:var(--accent); }
@@ -128,6 +129,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .bvn  { background:rgba(79,142,247,.15); color:#4f8ef7; }
 .bwo  { background:rgba(160,79,247,.15); color:#a04ff7; }
 .bec  { background:rgba(247,169,79,.15); color:#f7a94f; }
+.bmu  { background:rgba(218,41,28,.15); color:#da291c; }
 
 .bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
 .b-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
@@ -235,6 +237,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
         <button class="fbtn vn" onclick="setF('vn',this)">🇻🇳 Việt Nam</button>
         <button class="fbtn wo" onclick="setF('world',this)">🌍 Quốc tế</button>
         <button class="fbtn ec" onclick="setF('economy',this)">💹 Kinh tế</button>
+        <button class="fbtn mu" onclick="setF('mu',this)">🔴 MU</button>
       </div>
       <div id="clusterBox"><div class="loading"><div class="loading-dot"></div></div></div>
     </div>
@@ -295,7 +298,7 @@ function emptyBox(ic,tx) {
   return `<div class="empty"><div class="empty-ic">${ic}</div><div class="empty-tx">${tx}</div></div>`;
 }
 function catBadge(c) {
-  const m={vn:["bvn","VN"],world:["bwo","Quốc tế"],economy:["bec","Kinh tế"]};
+  const m={vn:["bvn","VN"],world:["bwo","Quốc tế"],economy:["bec","Kinh tế"],mu:["bmu","MU"]};
   const [cls,lb]=m[c]||["bvn",c];
   return `<span class="badge ${cls}">${lb}</span>`;
 }
