@@ -1,5 +1,6 @@
 """
-News Digest Scraper + Groq AI Processor + Financial Data
+News Digest Scraper + DeepSeek AI Processor + Financial Data
+Providers: DeepSeek (ưu tiên) → Groq (fallback)
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -30,14 +31,17 @@ def hard_timeout(seconds):
         signal.signal(signal.SIGALRM, old_handler)
 
 # ─── CONFIG ───────────────────────────────────────────────────
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+GROQ_API_KEY     = os.environ.get("GROQ_API_KEY")
 
 FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-if not GROQ_API_KEY:
+if not DEEPSEEK_API_KEY and not GROQ_API_KEY:
     raise ValueError(
-        "❌ Thiếu GROQ_API_KEY!\n"
-        "Lấy miễn phí tại: https://console.groq.com/keys"
+        "❌ Thiếu API key!\n"
+        "Hãy set ít nhất 1:\n"
+        "  • DEEPSEEK_API_KEY (khuyến nghị - https://platform.deepseek.com/)\n"
+        "  • GROQ_API_KEY (fallback - https://console.groq.com/keys)"
     )
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -61,8 +65,8 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-# 🔑 GIẢM XUỐNG 10: An toàn tuyệt đối với Groq Free Tier
-MAX_ARTICLES_FOR_AI     = 10
+# 🔑 Batch 8 bài để vừa với DeepSeek free tier (500K tokens/ngày)
+MAX_ARTICLES_FOR_AI     = 8
 
 STOCK_SYMBOLS = ["VIC", "VNM", "FPT", "HPG", "MSN", "SSI", "VCB", "CTG", "BID", "MWG"]
 
@@ -253,7 +257,33 @@ def validate_and_clean_clusters(result, valid_ids):
     return result
 
 
+# ─── GỌI TỪNG PROVIDER ────────────────────────────────────────
+def call_deepseek(prompt):
+    """Gọi DeepSeek API (tương thích OpenAI format)."""
+    resp = requests.post(
+        "https://api.deepseek.com/chat/completions",
+        headers={
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type":  "application/json",
+        },
+        json={
+            "model":       "deepseek-chat",  # DeepSeek-V3
+            "messages":    [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens":  8000,
+        },
+        timeout=(10, 180),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise ValueError("DeepSeek trả về không có choices")
+    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
+
+
 def call_groq(prompt):
+    """Gọi Groq API (fallback)."""
     resp = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={
@@ -276,7 +306,16 @@ def call_groq(prompt):
     return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
 
 
+# Danh sách providers theo thứ tự ưu tiên
+PROVIDERS = []
+if DEEPSEEK_API_KEY:
+    PROVIDERS.append(("deepseek", call_deepseek))
+if GROQ_API_KEY:
+    PROVIDERS.append(("groq", call_groq))
+
+
 def process_batch_with_ai(batch_articles, batch_label=""):
+    """Xử lý 1 batch, thử DeepSeek trước, Groq fallback."""
     print(f"  → Gọi AI{batch_label}...")
     subset = batch_articles[:MAX_ARTICLES_FOR_AI]
     valid_ids = {a["id"] for a in subset}
@@ -284,71 +323,74 @@ def process_batch_with_ai(batch_articles, batch_label=""):
     prompt = build_prompt(subset)
     subset_count = len(subset)
 
-    for retry_attempt in range(3):
-        print(f"  → Thử Groq llama-3.3-70b-versatile (lần {retry_attempt+1}/3)")
-        try:
-            with hard_timeout(130):
-                text, finish_reason = call_groq(prompt)
-            print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
-
-            if finish_reason == "length":
-                print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
-
+    for provider_name, caller in PROVIDERS:
+        print(f"  → Thử provider: {provider_name}")
+        
+        # Mỗi provider retry tối đa 2 lần cho 429
+        for retry_attempt in range(2):
             try:
-                result = parse_ai_response(text)
-            except json.JSONDecodeError as e:
-                print(f"  ⚠️  JSON parse lỗi: {e}")
-                continue
+                with hard_timeout(200):
+                    text, finish_reason = caller(prompt)
+                print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
 
-            arts_vi = result.get("articles_vi", [])
-            en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
-            vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
-            poorly_translated = 0
-            for eid in en_ids_in_subset:
-                item = vi_lookup.get(eid)
-                t_vi = (item.get("title_vi") or "").strip() if item else ""
-                orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
-                if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
-                    poorly_translated += 1
+                if finish_reason == "length":
+                    print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
 
-            if len(arts_vi) < subset_count or poorly_translated > 0:
-                print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
-                result = retry_ai(subset, prompt, result, valid_ids)
+                try:
+                    result = parse_ai_response(text)
+                except json.JSONDecodeError as e:
+                    print(f"  ⚠️  JSON parse lỗi: {e}")
+                    break  # Lỗi parse → thử provider khác
 
-            result = validate_and_clean_clusters(result, valid_ids)
-            clusters = result.get("clusters", [])
-            trends   = result.get("trends", [])
-            arts_vi  = result.get("articles_vi", [])
-            print(f"  ✅ AI xong: {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
-            return result
+                # Kiểm tra chất lượng
+                arts_vi = result.get("articles_vi", [])
+                en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
+                vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
+                poorly_translated = 0
+                for eid in en_ids_in_subset:
+                    item = vi_lookup.get(eid)
+                    t_vi = (item.get("title_vi") or "").strip() if item else ""
+                    orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
+                    if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
+                        poorly_translated += 1
 
-        except requests.exceptions.HTTPError as e:
-            status = e.response.status_code if e.response is not None else "?"
-            
-            if status == 429:
-                if retry_attempt < 2:
-                    # 🔑 Chờ lâu hơn để Groq reset rate limit
-                    wait_time = 60 if retry_attempt == 0 else 120
-                    print(f"  ⚠️  Groq rate limit (429). Chờ {wait_time}s trước khi retry...")
-                    time.sleep(wait_time)
-                    continue
+                if len(arts_vi) < subset_count or poorly_translated > 0:
+                    print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
+                    result = retry_ai(provider_name, caller, subset, prompt, result, valid_ids)
+
+                result = validate_and_clean_clusters(result, valid_ids)
+                clusters = result.get("clusters", [])
+                trends   = result.get("trends", [])
+                arts_vi  = result.get("articles_vi", [])
+                print(f"  ✅ AI xong ({provider_name}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
+                return result
+
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response is not None else "?"
+                
+                if status == 429:
+                    if retry_attempt == 0:
+                        wait_time = 30
+                        print(f"  ⚠️  {provider_name} rate limit (429). Chờ {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"  ⚠️  {provider_name} vẫn 429. Chuyển provider khác...")
+                        break
                 else:
-                    print(f"  ⚠️  Groq đã retry 2 lần vẫn 429. Chuyển sang fallback an toàn...")
+                    print(f"  ⚠️  {provider_name} HTTP {status}: {str(e)[:120]}")
                     break
-            else:
-                print(f"  ⚠️  Groq HTTP {status}: {str(e)[:120]}")
+
+            except Exception as e:
+                print(f"  ⚠️  {provider_name} lỗi: {str(e)[:150]}")
                 break
 
-        except Exception as e:
-            print(f"  ⚠️  Groq lỗi: {str(e)[:150]}")
-            break
-
-    # 🛡️ Fallback an toàn: trả về kết quả rỗng hợp lệ để không crash pipeline
-    print(f"  ⏭️  Bỏ qua batch này (dùng fallback), các batch sau vẫn chạy bình thường.")
+    print(f"  ❌ Tất cả providers đều thất bại")
     return fallback_result()
 
 
-def retry_ai(subset, original_prompt, partial_result, valid_ids):
+def retry_ai(provider_name, caller, subset, original_prompt, partial_result, valid_ids):
+    """Retry bổ sung các bài còn thiếu/dịch kém."""
     print("  → Retry bổ sung...")
     arts_vi = partial_result.get("articles_vi", [])
     vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
@@ -379,8 +421,8 @@ JSON: {{"articles_vi": [{{"id": "...", "title_vi": "...", "summary_vi": "..."}}]
 JSON:"""
 
     try:
-        with hard_timeout(130):
-            text, _ = call_groq(retry_prompt)
+        with hard_timeout(200):
+            text, _ = caller(retry_prompt)
         retry_data = parse_ai_response(text)
 
         existing = {a["id"]: a for a in partial_result.get("articles_vi", []) if "id" in a}
@@ -424,10 +466,10 @@ def process_with_ai(articles):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
-        # 🔑 Chờ 120s giữa các batch → Luôn dưới ngưỡng Groq Free Tier
+        # 🔑 Delay 30s giữa các batch - DeepSeek hào phóng hơn Groq nhiều
         if i < len(batches):
-            print(f"  ⏳ Chờ 120s trước khi gọi batch tiếp theo...")
-            time.sleep(120)
+            print(f"  ⏳ Chờ 30s trước khi gọi batch tiếp theo...")
+            time.sleep(30)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
@@ -622,7 +664,6 @@ def fetch_youtube_trending():
 
 # ─── FINANCIAL DATA ───────────────────────────────────────────
 def fetch_financial_data():
-    """Lấy dữ liệu tài chính: vàng, Bitcoin, USD, Yên, stocks tăng/giảm 3 phiên."""
     print("  → Fetch Financial Data...")
     
     usd_vnd_rate = fetch_usd_vnd_rate()
@@ -643,7 +684,6 @@ def fetch_financial_data():
 
 
 def fetch_usd_vnd_rate():
-    """Lấy tỷ giá USD/VND hiện tại."""
     try:
         resp = requests.get(
             "https://api.exchangerate-api.com/v4/latest/USD",
@@ -659,7 +699,6 @@ def fetch_usd_vnd_rate():
 
 
 def fetch_gold_price(usd_vnd_rate):
-    """Lấy giá vàng thế giới và quy đổi sang VND/chỉ."""
     try:
         resp = requests.get(
             "https://api.metals.dev/v1/latest",
@@ -682,13 +721,8 @@ def fetch_gold_price(usd_vnd_rate):
         
         base = price_vnd_per_chi
         history = [
-            base - 180000,
-            base - 150000,
-            base - 120000,
-            base - 80000,
-            base - 50000,
-            base - 20000,
-            base,
+            base - 180000, base - 150000, base - 120000, base - 80000,
+            base - 50000, base - 20000, base,
         ]
         
         change = ((base - history[0]) / history[0]) * 100
@@ -706,7 +740,6 @@ def fetch_gold_price(usd_vnd_rate):
 
 
 def fetch_bitcoin_price(usd_vnd_rate):
-    """Lấy giá Bitcoin từ CoinGecko API."""
     try:
         resp = requests.get(
             "https://api.coingecko.com/api/v3/simple/price",
@@ -741,7 +774,6 @@ def fetch_bitcoin_price(usd_vnd_rate):
 
 
 def fetch_bitcoin_history(usd_vnd_rate):
-    """Lấy lịch sử giá Bitcoin 7 ngày."""
     try:
         resp = requests.get(
             "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart",
@@ -760,14 +792,9 @@ def fetch_bitcoin_history(usd_vnd_rate):
 
 
 def build_currency_data(usd_vnd_rate, currency):
-    """Build dữ liệu cho USD/VND."""
     history = [
-        usd_vnd_rate - 30,
-        usd_vnd_rate - 25,
-        usd_vnd_rate - 20,
-        usd_vnd_rate - 15,
-        usd_vnd_rate - 10,
-        usd_vnd_rate - 5,
+        usd_vnd_rate - 30, usd_vnd_rate - 25, usd_vnd_rate - 20,
+        usd_vnd_rate - 15, usd_vnd_rate - 10, usd_vnd_rate - 5,
         usd_vnd_rate,
     ]
     change = ((usd_vnd_rate - history[0]) / history[0]) * 100
@@ -781,7 +808,6 @@ def build_currency_data(usd_vnd_rate, currency):
 
 
 def fetch_jpy_data(usd_vnd_rate):
-    """Lấy tỷ giá JPY/VND."""
     try:
         resp = requests.get(
             "https://api.exchangerate-api.com/v4/latest/JPY",
@@ -807,7 +833,6 @@ def fetch_jpy_data(usd_vnd_rate):
 
 
 def fetch_stock_movers():
-    """Lấy danh sách stocks tăng/giảm 3 phiên liên tiếp từ Yahoo Finance."""
     gainers = []
     losers = []
     
@@ -830,7 +855,6 @@ def fetch_stock_movers():
             
             quotes = result[0].get("indicators", {}).get("quote", [{}])[0]
             closes = quotes.get("close", [])
-            
             closes = [c for c in closes if c is not None]
             
             if len(closes) < 4:
@@ -879,7 +903,6 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID")
 
 
 def send_telegram(message):
-    """Gửi tin nhắn Telegram."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
     try:
@@ -902,7 +925,6 @@ def send_telegram(message):
 
 
 def build_hot_news_notification(articles, ai_result):
-    """Xây dựng thông báo tin nóng."""
     clusters = ai_result.get("clusters", [])
     trends   = ai_result.get("trends", [])
     
@@ -989,7 +1011,11 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
     if youtube_trends:
         ref.child(f"youtube_trends/{TODAY}").set(youtube_trends)
     if financial_data:
-        ref.child(f"financial/{TODAY}").set(financial_data)
+        try:
+            ref.child(f"financial/{TODAY}").set(financial_data)
+            print("     💹 Đã lưu dữ liệu tài chính")
+        except Exception as e:
+            print(f"     ⚠️  Không thể lưu dữ liệu tài chính (bỏ qua): {str(e)[:100]}")
 
     ref.child("meta/lastUpdated").set(datetime.now(VN_TZ).isoformat())
     ref.child("meta/lastDate").set(TODAY)
@@ -1001,12 +1027,14 @@ def main():
     print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
     print("🔑 API keys status:")
-    for key in ["GROQ_API_KEY", "TELEGRAM_BOT_TOKEN"]:
+    for key in ["DEEPSEEK_API_KEY", "GROQ_API_KEY", "TELEGRAM_BOT_TOKEN"]:
         val = os.environ.get(key)
         status = f"✅ có ({len(val)} ký tự)" if val else "❌ KHÔNG CÓ"
         print(f"   • {key}: {status}")
 
-    print("\n🔌 AI provider: Groq (llama-3.3-70b-versatile)")
+    print("\n🔌 AI providers:")
+    for pname, _ in PROVIDERS:
+        print(f"   • {pname}")
 
     print("\n1️⃣  Init Firebase...")
     ref = init_firebase()
