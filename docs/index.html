@@ -11,10 +11,44 @@
   --border: #252a38; --accent: #4f8ef7; --accent2: #f7a94f;
   --accent3: #4ff7a0; --text: #e8eaf0; --text2: #8b90a0;
   --text3: #555b6e; --danger: #f74f4f; --r: 10px;
+  --hot: #f74f4f; --warm: #f7a94f; --cool: #4f8ef7;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',sans-serif; font-size:14px; line-height:1.6; }
 
+/* ── ANIMATIONS ─────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity:0; transform:translateY(20px); }
+  to { opacity:1; transform:translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity:0; transform:translateX(-20px); }
+  to { opacity:1; transform:translateX(0); }
+}
+@keyframes pulseGlow {
+  0%,100% { box-shadow:0 0 0 rgba(247,79,79,0); }
+  50% { box-shadow:0 0 20px rgba(247,79,79,.4); }
+}
+@keyframes progressFill {
+  from { width:0; }
+}
+@keyframes countUp {
+  from { opacity:0; transform:scale(.5); }
+  to { opacity:1; transform:scale(1); }
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+@keyframes shimmer {
+  0% { background-position:-200% 0; }
+  100% { background-position:200% 0; }
+}
+
+.fade-in { animation:fadeInUp .5s ease-out both; }
+.stagger-1 { animation-delay:.1s; }
+.stagger-2 { animation-delay:.2s; }
+.stagger-3 { animation-delay:.3s; }
+.stagger-4 { animation-delay:.4s; }
+
+/* ── TOPBAR ─────────────────────────────────────────────────── */
 .topbar {
   position:sticky; top:0; z-index:100;
   background:rgba(13,15,20,0.95); backdrop-filter:blur(12px);
@@ -47,81 +81,251 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 }
 .btn-refresh:hover { opacity:.85; }
 .btn-refresh.loading { opacity:.6; pointer-events:none; }
-@keyframes spin { to { transform:rotate(360deg); } }
 .spin { animation:spin .8s linear infinite; display:inline-block; }
 
 .wrap { max-width:1400px; margin:0 auto; padding:20px 24px; }
 
+/* ── DIGEST ─────────────────────────────────────────────────── */
 .digest {
   background:linear-gradient(135deg,var(--bg2),#1a1e35);
   border:1px solid var(--border); border-left:3px solid var(--accent);
   border-radius:var(--r); padding:20px 24px; margin-bottom:20px;
+  position:relative; overflow:hidden;
 }
-.digest-label { font-size:10px; font-weight:700; letter-spacing:2px; color:var(--accent); text-transform:uppercase; margin-bottom:8px; }
+.digest::before {
+  content:""; position:absolute; top:0; right:0; width:200px; height:200px;
+  background:radial-gradient(circle,rgba(79,142,247,.1) 0%,transparent 70%);
+  pointer-events:none;
+}
+.digest-label {
+  font-size:10px; font-weight:700; letter-spacing:2px; color:var(--accent);
+  text-transform:uppercase; margin-bottom:8px;
+  display:flex; align-items:center; gap:6px;
+}
+.digest-label::before {
+  content:""; width:6px; height:6px; background:var(--accent); border-radius:50%;
+  animation:pulseGlow 2s infinite;
+}
 .digest-h { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; line-height:1.3; margin-bottom:10px; }
 .digest-p { font-size:13px; color:var(--text2); line-height:1.7; margin-bottom:14px; }
 .digest-tags { display:flex; flex-wrap:wrap; gap:8px; }
 .digest-tag {
   background:var(--bg3); border:1px solid var(--border);
   border-radius:20px; padding:4px 12px; font-size:12px; color:var(--text2);
+  transition:.2s;
 }
+.digest-tag:hover { border-color:var(--accent); color:var(--accent); }
 .digest-tag::before { content:"• "; color:var(--accent); }
 .digest-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
-.dg-item { background:rgba(0,0,0,0.15); border-radius:8px; padding:12px 14px; }
+.dg-item {
+  background:rgba(0,0,0,0.15); border-radius:8px; padding:12px 14px;
+  border-left:2px solid var(--accent); transition:.2s;
+}
+.dg-item:hover { background:rgba(79,142,247,.05); transform:translateX(2px); }
 .dg-name { font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
 .dg-text { font-size:12px; color:var(--text2); line-height:1.6; }
 
+/* ── STATS ──────────────────────────────────────────────────── */
 .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
-.stat { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); padding:16px; text-align:center; }
-.stat-n { font-family:'Playfair Display',serif; font-size:32px; font-weight:700; color:var(--accent); line-height:1; }
-.stat-l { font-size:11px; color:var(--text3); margin-top:4px; }
+.stat {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--r);
+  padding:16px; text-align:center; position:relative; overflow:hidden;
+  transition:.3s;
+}
+.stat:hover { transform:translateY(-2px); border-color:var(--accent); }
+.stat::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  transform:scaleX(0); transition:.3s;
+}
+.stat:hover::before { transform:scaleX(1); }
+.stat-ic { font-size:20px; margin-bottom:6px; }
+.stat-n {
+  font-family:'Playfair Display',serif; font-size:32px; font-weight:700;
+  color:var(--accent); line-height:1; animation:countUp .6s ease-out both;
+}
+.stat:nth-child(2) .stat-n { color:var(--accent2); }
+.stat:nth-child(3) .stat-n { color:var(--accent3); }
+.stat:nth-child(4) .stat-n { color:#a04ff7; }
+.stat-l { font-size:11px; color:var(--text3); margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
 
 .grid { display:grid; grid-template-columns:280px 1fr; gap:20px; margin-bottom:24px; }
 
+/* ── CARD ───────────────────────────────────────────────────── */
 .card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
 .card + .card { margin-top:14px; }
 .card-hd { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
 .card-hd-title { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); }
 .card-bd { padding:12px; }
 
-.trend-item { display:flex; gap:10px; padding:8px; border-radius:8px; cursor:pointer; transition:.2s; }
-.trend-item:hover { background:var(--bg3); }
-.t-rank { font-family:'Playfair Display',serif; font-size:20px; font-weight:900; color:var(--border); min-width:26px; line-height:1; margin-top:2px; }
-.t-rank.r1 { color:var(--accent2); }
-.t-rank.r2 { color:var(--text3); }
-.t-rank.r3 { color:#7c5c3a; }
+/* ── TRENDS (CẢI TIẾN) ─────────────────────────────────────── */
+.trend-item {
+  display:flex; gap:10px; padding:10px; border-radius:8px;
+  cursor:pointer; transition:.3s; position:relative; overflow:hidden;
+  margin-bottom:4px;
+}
+.trend-item:hover { background:var(--bg3); transform:translateX(4px); }
+.trend-item.hot {
+  background:linear-gradient(135deg,rgba(247,79,79,.08),rgba(247,169,79,.05));
+  border:1px solid rgba(247,79,79,.2);
+}
+.trend-item.hot:hover { border-color:var(--hot); }
+.t-rank {
+  font-family:'Playfair Display',serif; font-size:22px; font-weight:900;
+  min-width:28px; line-height:1; margin-top:2px;
+  background:linear-gradient(135deg,var(--text3),var(--border));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.t-rank.r1 {
+  background:linear-gradient(135deg,#f74f4f,#f7a94f);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+  filter:drop-shadow(0 0 8px rgba(247,79,79,.3));
+}
+.t-rank.r2 {
+  background:linear-gradient(135deg,#f7a94f,#f7d94f);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.t-rank.r3 {
+  background:linear-gradient(135deg,#4f8ef7,#4ff7a0);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.t-content { flex:1; min-width:0; }
+.t-header { display:flex; align-items:center; gap:6px; margin-bottom:2px; }
 .t-topic { font-size:13px; font-weight:600; }
+.t-badge {
+  font-size:9px; font-weight:700; padding:2px 6px; border-radius:10px;
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+.t-badge.hot { background:var(--hot); color:#fff; animation:pulseGlow 2s infinite; }
+.t-badge.rising { background:rgba(79,247,160,.15); color:var(--accent3); }
 .t-reason { font-size:11px; color:var(--text3); margin-top:2px; line-height:1.4; }
-.t-bar { height:2px; background:var(--border); border-radius:2px; margin-top:6px; }
-.t-bar-fill { height:100%; background:var(--accent); border-radius:2px; }
+.t-bar { height:3px; background:var(--border); border-radius:3px; margin-top:6px; overflow:hidden; }
+.t-bar-fill {
+  height:100%; border-radius:3px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  animation:progressFill 1s ease-out both;
+  position:relative;
+}
+.trend-item.hot .t-bar-fill {
+  background:linear-gradient(90deg,var(--hot),var(--accent2));
+}
+.t-score {
+  font-size:10px; font-weight:700; color:var(--text3);
+  margin-left:auto; flex-shrink:0;
+}
 
+/* ── SHARE BOX ──────────────────────────────────────────────── */
 .share-box { display:flex; gap:8px; align-items:center; background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
 .share-input { flex:1; background:none; border:none; color:var(--text2); font-size:11px; font-family:monospace; outline:none; }
 .btn-copy { background:var(--bg3); border:1px solid var(--border); color:var(--text2); padding:4px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-family:inherit; white-space:nowrap; transition:.2s; }
 .btn-copy:hover { border-color:var(--accent); color:var(--accent); }
 .btn-copy.ok { background:var(--accent3); color:#000; border-color:var(--accent3); }
 
+/* ── FILTERS ────────────────────────────────────────────────── */
 .filters { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-.fbtn { background:var(--bg2); border:1px solid var(--border); color:var(--text2); padding:5px 14px; border-radius:20px; font-size:12px; font-family:inherit; cursor:pointer; transition:.2s; }
-.fbtn:hover, .fbtn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.fbtn {
+  background:var(--bg2); border:1px solid var(--border); color:var(--text2);
+  padding:5px 14px; border-radius:20px; font-size:12px; font-family:inherit;
+  cursor:pointer; transition:.2s;
+}
+.fbtn:hover { border-color:var(--accent); color:var(--accent); }
+.fbtn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
 .fbtn.vn.on  { background:#4f8ef7; border-color:#4f8ef7; }
 .fbtn.wo.on  { background:#a04ff7; border-color:#a04ff7; }
 .fbtn.ec.on  { background:#f7a94f; border-color:#f7a94f; color:#000; }
 .fbtn.mu.on  { background:#da291c; border-color:#da291c; }
 
-.cl-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; margin-bottom:10px; transition:.2s; }
-.cl-card:hover { border-color:var(--accent); }
-.cl-hd { padding:14px 16px; display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
-.cl-num { min-width:28px; height:28px; background:var(--bg3); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--accent2); flex-shrink:0; margin-top:2px; }
+/* ── CLUSTERS (CẢI TIẾN MẠNH) ──────────────────────────────── */
+.cl-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--r);
+  overflow:hidden; margin-bottom:12px; transition:.3s; position:relative;
+}
+.cl-card::before {
+  content:""; position:absolute; top:0; left:0; bottom:0; width:4px;
+  background:linear-gradient(180deg,var(--cool),var(--accent));
+  transition:.3s;
+}
+.cl-card.imp-high::before { background:linear-gradient(180deg,var(--hot),var(--warm)); }
+.cl-card.imp-med::before { background:linear-gradient(180deg,var(--warm),var(--accent2)); }
+.cl-card.imp-low::before { background:linear-gradient(180deg,var(--cool),var(--accent)); }
+.cl-card:hover {
+  border-color:var(--accent);
+  transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(0,0,0,.3);
+}
+.cl-hd {
+  padding:14px 16px 14px 20px; display:flex; align-items:flex-start; gap:12px;
+  cursor:pointer; position:relative;
+}
+.cl-num {
+  min-width:36px; height:36px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-weight:700; flex-shrink:0; margin-top:2px;
+  position:relative;
+}
+.cl-num.high {
+  background:linear-gradient(135deg,var(--hot),var(--warm));
+  color:#fff; box-shadow:0 4px 12px rgba(247,79,79,.3);
+}
+.cl-num.med {
+  background:linear-gradient(135deg,var(--warm),#f7d94f);
+  color:#000;
+}
+.cl-num.low {
+  background:var(--bg3); color:var(--accent); border:1px solid var(--border);
+}
+.cl-num-icon {
+  position:absolute; top:-4px; right:-4px; font-size:12px;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+}
+.cl-main { flex:1; min-width:0; }
+.cl-title-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .cl-title { font-size:15px; font-weight:700; line-height:1.3; }
+.cl-count {
+  font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px;
+  background:var(--bg3); color:var(--text2); white-space:nowrap;
+}
 .cl-sum { font-size:12px; color:var(--text2); margin-top:4px; line-height:1.6; }
-.cl-arrow { margin-left:auto; color:var(--text3); font-size:18px; flex-shrink:0; transition:.2s; }
-.cl-arrow.open { transform:rotate(180deg); }
+.cl-preview {
+  margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);
+  display:flex; flex-direction:column; gap:6px;
+}
+.cl-preview-item {
+  display:flex; align-items:center; gap:8px; font-size:12px;
+  color:var(--text2); text-decoration:none; transition:.2s;
+}
+.cl-preview-item:hover { color:var(--accent); }
+.cl-preview-dot {
+  width:4px; height:4px; border-radius:50%; background:var(--accent);
+  flex-shrink:0;
+}
+.cl-preview-title {
+  flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.cl-preview-src {
+  font-size:10px; color:var(--text3); flex-shrink:0;
+}
+.cl-arrow {
+  margin-left:auto; color:var(--text3); font-size:18px;
+  flex-shrink:0; transition:.3s;
+}
+.cl-arrow.open { transform:rotate(180deg); color:var(--accent); }
 .cl-body { border-top:1px solid var(--border); display:none; flex-direction:column; }
-.cl-body.open { display:flex; }
-.art-row { padding:10px 16px 10px 54px; border-bottom:1px solid var(--border); }
+.cl-body.open { display:flex; animation:fadeInUp .3s ease-out; }
+.art-row {
+  padding:12px 16px 12px 20px; border-bottom:1px solid var(--border);
+  transition:.2s;
+}
+.art-row:hover { background:rgba(79,142,247,.03); }
 .art-row:last-child { border-bottom:none; }
-.art-title { font-size:13px; font-weight:500; color:var(--text); text-decoration:none; line-height:1.4; display:block; }
+.art-title {
+  font-size:13px; font-weight:500; color:var(--text); text-decoration:none;
+  line-height:1.4; display:block;
+}
 .art-title:hover { color:var(--accent); }
 .art-meta { display:flex; gap:8px; align-items:center; font-size:11px; color:var(--text3); margin-top:2px; }
 .art-summary { font-size:12px; color:var(--text2); line-height:1.6; margin-top:5px; }
@@ -131,21 +335,28 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .bec  { background:rgba(247,169,79,.15); color:#f7a94f; }
 .bmu  { background:rgba(218,41,28,.15); color:#da291c; }
 
+/* ── BOTTOM ROW ─────────────────────────────────────────────── */
 .bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
 .b-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; }
 .b-hd { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
 .b-title { font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
 
 .gt-grid { display:grid; grid-template-columns:1fr 1fr; padding:10px; gap:2px; }
-.gt-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px; text-decoration:none; transition:.2s; }
-.gt-row:hover { background:var(--bg3); }
+.gt-row {
+  display:flex; align-items:center; gap:8px; padding:8px 10px;
+  border-radius:6px; text-decoration:none; transition:.2s;
+}
+.gt-row:hover { background:var(--bg3); transform:translateX(2px); }
 .gt-num { font-size:12px; font-weight:700; color:var(--text3); min-width:18px; text-align:right; flex-shrink:0; }
 .gt-num.hot { color:var(--accent2); }
 .gt-kw { font-size:12px; font-weight:600; color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gt-vol { font-size:10px; color:var(--accent3); background:rgba(79,247,160,.1); padding:1px 6px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
 
 .yt-grid { display:grid; grid-template-columns:1fr 1fr; padding:10px; gap:6px; }
-.yt-row { display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border-radius:6px; text-decoration:none; transition:.2s; }
+.yt-row {
+  display:flex; gap:8px; align-items:flex-start; padding:6px 8px;
+  border-radius:6px; text-decoration:none; transition:.2s;
+}
 .yt-row:hover { background:var(--bg3); }
 .yt-num { font-size:11px; font-weight:700; color:var(--text3); min-width:16px; text-align:center; flex-shrink:0; margin-top:4px; }
 .yt-num.hot { color:#f74f4f; }
@@ -178,6 +389,8 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   .topbar { padding:0 12px; }
   .topbar-meta { display:none; }
   .wrap { padding:12px; }
+  .digest-h { font-size:18px; }
+  .cl-title { font-size:14px; }
 }
 </style>
 </head>
@@ -199,7 +412,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 <div class="wrap">
   <div id="updatedAt"></div>
 
-  <div id="digestWrap" style="display:none" class="digest">
+  <div id="digestWrap" style="display:none" class="digest fade-in">
     <div class="digest-label">📋 Tổng kết hôm nay</div>
     <div class="digest-h" id="dHead"></div>
     <div class="digest-p" id="dOver"></div>
@@ -208,19 +421,19 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   </div>
 
   <div class="stats">
-    <div class="stat"><div class="stat-n" id="sArt">—</div><div class="stat-l">Bài báo</div></div>
-    <div class="stat"><div class="stat-n" id="sClu">—</div><div class="stat-l">Chủ đề</div></div>
-    <div class="stat"><div class="stat-n" id="sSrc">—</div><div class="stat-l">Nguồn tin</div></div>
-    <div class="stat"><div class="stat-n" id="sTrd">—</div><div class="stat-l">Xu hướng</div></div>
+    <div class="stat fade-in stagger-1"><div class="stat-ic">📰</div><div class="stat-n" id="sArt">—</div><div class="stat-l">Bài báo</div></div>
+    <div class="stat fade-in stagger-2"><div class="stat-ic">🎯</div><div class="stat-n" id="sClu">—</div><div class="stat-l">Chủ đề</div></div>
+    <div class="stat fade-in stagger-3"><div class="stat-ic">📡</div><div class="stat-n" id="sSrc">—</div><div class="stat-l">Nguồn tin</div></div>
+    <div class="stat fade-in stagger-4"><div class="stat-ic">📈</div><div class="stat-n" id="sTrd">—</div><div class="stat-l">Xu hướng</div></div>
   </div>
 
   <div class="grid">
     <div>
-      <div class="card">
+      <div class="card fade-in">
         <div class="card-hd"><span>🔥</span><span class="card-hd-title">Xu hướng hôm nay</span></div>
         <div class="card-bd" id="trendBox"><div class="loading"><div class="loading-dot"></div></div></div>
       </div>
-      <div class="card">
+      <div class="card fade-in stagger-2">
         <div class="card-hd"><span>🔗</span><span class="card-hd-title">Chia sẻ</span></div>
         <div class="card-bd">
           <div class="share-box">
@@ -244,11 +457,11 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   </div>
 
   <div class="bottom-row">
-    <div class="b-card">
+    <div class="b-card fade-in">
       <div class="b-hd"><span>🔍</span><span class="b-title">Google Trends Việt Nam</span></div>
       <div id="gtBox"><div class="loading"><div class="loading-dot"></div></div></div>
     </div>
-    <div class="b-card">
+    <div class="b-card fade-in stagger-2">
       <div class="b-hd"><span>▶️</span><span class="b-title">YouTube Trending Việt Nam</span></div>
       <div id="ytBox"><div class="loading"><div class="loading-dot"></div></div></div>
     </div>
@@ -301,6 +514,23 @@ function catBadge(c) {
   const m={vn:["bvn","VN"],world:["bwo","Quốc tế"],economy:["bec","Kinh tế"],mu:["bmu","MU"]};
   const [cls,lb]=m[c]||["bvn",c];
   return `<span class="badge ${cls}">${lb}</span>`;
+}
+
+// Helper: xác định mức độ quan trọng của cluster
+function impLevel(imp) {
+  imp = parseInt(imp) || 0;
+  if (imp >= 8) return "high";
+  if (imp >= 6) return "med";
+  return "low";
+}
+
+// Helper: icon cho mức importance
+function impIcon(imp) {
+  imp = parseInt(imp) || 0;
+  if (imp >= 9) return "🔥";
+  if (imp >= 8) return "⭐";
+  if (imp >= 6) return "📌";
+  return "📰";
 }
 
 window.addEventListener("DOMContentLoaded",()=>{
@@ -364,30 +594,59 @@ function renderDigest(d){
 
 function renderStats(a,c,t){
   const arr=Object.values(a);
-  document.getElementById("sArt").textContent=arr.length||0;
-  document.getElementById("sClu").textContent=c.length||0;
-  document.getElementById("sSrc").textContent=new Set(arr.map(x=>x.source)).size||0;
-  document.getElementById("sTrd").textContent=t.length||0;
+  animateNumber("sArt", arr.length||0);
+  animateNumber("sClu", c.length||0);
+  animateNumber("sSrc", new Set(arr.map(x=>x.source)).size||0);
+  animateNumber("sTrd", t.length||0);
 }
 
+// Animation đếm số
+function animateNumber(id, target) {
+  const el = document.getElementById(id);
+  const duration = 800;
+  const start = performance.now();
+  const from = 0;
+  
+  function update(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(from + (target - from) * eased);
+    el.textContent = current;
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+// ── RENDER TRENDS (CẢI TIẾN) ─────────────────────────────────
 function renderTrends(t){
   const el=document.getElementById("trendBox");
   if(!t.length){el.innerHTML=emptyBox("📭","Chưa có dữ liệu");return;}
   const rc=r=>r===1?"r1":r===2?"r2":r===3?"r3":"";
-  el.innerHTML=t.map(x=>`
-    <div class="trend-item">
+  el.innerHTML=t.map((x,i)=>{
+    const isHot = x.rank === 1 || (x.score||0) >= 90;
+    const isRising = (x.score||0) >= 80 && x.rank > 1;
+    return `
+    <div class="trend-item ${isHot?'hot':''}" style="animation:slideInRight .4s ease-out ${i*0.08}s both">
       <div class="t-rank ${rc(x.rank)}">${x.rank}</div>
-      <div>
-        <div class="t-topic">${esc(x.topic)}</div>
+      <div class="t-content">
+        <div class="t-header">
+          <div class="t-topic">${esc(x.topic)}</div>
+          ${isHot?'<span class="t-badge hot">🔥 HOT</span>':''}
+          ${isRising?'<span class="t-badge rising">↑ Rising</span>':''}
+        </div>
         <div class="t-reason">${esc(x.reason||"")}</div>
-        <div class="t-bar"><div class="t-bar-fill" style="width:${x.score||50}%"></div></div>
+        <div class="t-bar">
+          <div class="t-bar-fill" style="width:${x.score||50}%;animation-delay:${i*0.1+0.3}s"></div>
+        </div>
       </div>
-    </div>`).join("");
+      <div class="t-score">${x.score||0}</div>
+    </div>`;
+  }).join("");
 }
 
-// ── RENDER CLUSTERS ───────────────────────────────────────────
-// Bây giờ c.articles là MẢNG ID STRING (vd: ["a1b2c3d4e5f6", ...])
-// thay vì số thứ tự — match trực tiếp theo article.id, không lệch index nữa.
+// ── RENDER CLUSTERS (CẢI TIẾN MẠNH) ─────────────────────────
 function renderClusters(a,cls,f){
   const arr=Object.values(a);
   const byId={};
@@ -403,20 +662,46 @@ function renderClusters(a,cls,f){
   }
   if(!list.length){el.innerHTML=emptyBox("🗞️","Không có tin trong mục này");return;}
   const sorted=[...list].sort((a,b)=>(b.importance||0)-(a.importance||0));
+  
   el.innerHTML=sorted.map((c,ci)=>{
     const ids=Array.isArray(c.articles)?c.articles:[];
     const rel=ids.map(id=>byId[id]).filter(Boolean);
+    const imp = parseInt(c.importance) || 0;
+    const level = impLevel(imp);
+    const icon = impIcon(imp);
+    
+    // Preview 2 bài đầu tiên
+    const previewItems = rel.slice(0, 2).map(a => `
+      <a class="cl-preview-item" href="${esc(a.url)}" target="_blank" rel="noopener">
+        <span class="cl-preview-dot"></span>
+        <span class="cl-preview-title">${esc(a.title_vi||a.title)}</span>
+        <span class="cl-preview-src">${esc(a.source)}</span>
+      </a>
+    `).join("");
+    
+    // Danh sách đầy đủ khi expand
     const rows=rel.map(a=>`
       <div class="art-row">
         <a class="art-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title_vi||a.title)}</a>
         ${(a.summary_vi||a.summary)?`<div class="art-summary">${esc(a.summary_vi||a.summary)}</div>`:""}
         <div class="art-meta">${catBadge(a.cat)}<span>${esc(a.source)}</span></div>
       </div>`).join("");
+    
     return `
-      <div class="cl-card">
+      <div class="cl-card imp-${level} fade-in" style="animation-delay:${ci*0.05}s">
         <div class="cl-hd" onclick="toggleCl(${ci})">
-          <div class="cl-num">${c.importance||"?"}</div>
-          <div><div class="cl-title">${esc(c.topic)}</div><div class="cl-sum">${esc(c.summary||"")}</div></div>
+          <div class="cl-num ${level}">
+            ${imp}
+            <span class="cl-num-icon">${icon}</span>
+          </div>
+          <div class="cl-main">
+            <div class="cl-title-row">
+              <div class="cl-title">${esc(c.topic)}</div>
+              <span class="cl-count">📎 ${rel.length} bài</span>
+            </div>
+            <div class="cl-sum">${esc(c.summary||"")}</div>
+            ${previewItems && rel.length > 2 ? `<div class="cl-preview">${previewItems}</div>` : ''}
+          </div>
           <div class="cl-arrow" id="ca${ci}">⌄</div>
         </div>
         <div class="cl-body" id="cb${ci}">${rows||emptyBox("","Không có bài")}</div>
@@ -431,7 +716,7 @@ function renderGoogle(items){
     const kw=t.keyword||t.query||"";
     const vol=t.traffic||"";
     const url=(t.news_items||[])[0]?.url||"#";
-    return `<a class="gt-row" href="${esc(url)}" target="_blank" rel="noopener">
+    return `<a class="gt-row" href="${esc(url)}" target="_blank" rel="noopener" style="animation:fadeInUp .4s ease-out ${i*0.05}s both">
       <span class="gt-num ${i<3?"hot":""}">${i+1}</span>
       <span class="gt-kw">${esc(kw)}</span>
       ${vol?`<span class="gt-vol">${esc(vol)}</span>`:""}
@@ -446,7 +731,7 @@ function renderYoutube(items){
     const vid=v.videoId||"";
     const url=v.url||(vid?`https://www.youtube.com/watch?v=${vid}`:"#");
     const th=v.thumbnail||(vid?`https://i.ytimg.com/vi/${vid}/mqdefault.jpg`:"");
-    return `<a class="yt-row" href="${esc(url)}" target="_blank" rel="noopener">
+    return `<a class="yt-row" href="${esc(url)}" target="_blank" rel="noopener" style="animation:fadeInUp .4s ease-out ${i*0.05}s both">
       <span class="yt-num ${i<3?"hot":""}">${i+1}</span>
       ${th?`<img class="yt-thumb" src="${esc(th)}" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
       <div class="yt-info">
