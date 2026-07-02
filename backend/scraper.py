@@ -1,6 +1,5 @@
 """
 News Digest Scraper + Groq AI Processor + Financial Data
-Providers: Groq (ưu tiên) + Gemini + OpenRouter
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -62,9 +61,9 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-MAX_ARTICLES_FOR_AI     = 15
+# 🔑 GIẢM XUỐNG 10: An toàn tuyệt đối với Groq Free Tier
+MAX_ARTICLES_FOR_AI     = 10
 
-# Danh sách mã stocks theo dõi
 STOCK_SYMBOLS = ["VIC", "VNM", "FPT", "HPG", "MSN", "SSI", "VCB", "CTG", "BID", "MWG"]
 
 
@@ -328,12 +327,13 @@ def process_batch_with_ai(batch_articles, batch_label=""):
             
             if status == 429:
                 if retry_attempt < 2:
-                    wait_time = 30 * (retry_attempt + 1)
+                    # 🔑 Chờ lâu hơn để Groq reset rate limit
+                    wait_time = 60 if retry_attempt == 0 else 120
                     print(f"  ⚠️  Groq rate limit (429). Chờ {wait_time}s trước khi retry...")
                     time.sleep(wait_time)
                     continue
                 else:
-                    print(f"  ⚠️  Groq đã retry 2 lần vẫn 429.")
+                    print(f"  ⚠️  Groq đã retry 2 lần vẫn 429. Chuyển sang fallback an toàn...")
                     break
             else:
                 print(f"  ⚠️  Groq HTTP {status}: {str(e)[:120]}")
@@ -343,7 +343,8 @@ def process_batch_with_ai(batch_articles, batch_label=""):
             print(f"  ⚠️  Groq lỗi: {str(e)[:150]}")
             break
 
-    print(f"  ❌ Groq thất bại")
+    # 🛡️ Fallback an toàn: trả về kết quả rỗng hợp lệ để không crash pipeline
+    print(f"  ⏭️  Bỏ qua batch này (dùng fallback), các batch sau vẫn chạy bình thường.")
     return fallback_result()
 
 
@@ -423,15 +424,16 @@ def process_with_ai(articles):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
+        # 🔑 Chờ 120s giữa các batch → Luôn dưới ngưỡng Groq Free Tier
         if i < len(batches):
-            print(f"  ⏳ Chờ 60s trước khi gọi batch tiếp theo...")
-            time.sleep(60)
+            print(f"  ⏳ Chờ 120s trước khi gọi batch tiếp theo...")
+            time.sleep(120)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
         merged_trends.extend(batch_result.get("trends", []))
 
-        if i == 1:
+        if i == 1 and batch_result.get("digest", {}).get("headline"):
             digest_result = batch_result.get("digest")
 
     valid_trends = [t for t in merged_trends if isinstance(t, dict)]
@@ -623,7 +625,6 @@ def fetch_financial_data():
     """Lấy dữ liệu tài chính: vàng, Bitcoin, USD, Yên, stocks tăng/giảm 3 phiên."""
     print("  → Fetch Financial Data...")
     
-    # Lấy tỷ giá USD/VND trước (dùng chung)
     usd_vnd_rate = fetch_usd_vnd_rate()
     print(f"     💱 USD/VND = {usd_vnd_rate:,.0f}")
     
@@ -642,7 +643,7 @@ def fetch_financial_data():
 
 
 def fetch_usd_vnd_rate():
-    """Lấy tỷ giá USD/VND hiện tại từ exchangerate-api.com."""
+    """Lấy tỷ giá USD/VND hiện tại."""
     try:
         resp = requests.get(
             "https://api.exchangerate-api.com/v4/latest/USD",
@@ -658,9 +659,8 @@ def fetch_usd_vnd_rate():
 
 
 def fetch_gold_price(usd_vnd_rate):
-    """Lấy giá vàng thế giới và quy đổi sang VND/lượng."""
+    """Lấy giá vàng thế giới và quy đổi sang VND/chỉ."""
     try:
-        # API miễn phí từ metals.dev (không cần key)
         resp = requests.get(
             "https://api.metals.dev/v1/latest",
             params={"api_key": "demo", "currency": "USD", "unit": "toz"},
@@ -672,18 +672,14 @@ def fetch_gold_price(usd_vnd_rate):
             data = resp.json()
             price_usd = data.get("metals", {}).get("gold")
         
-        # Fallback: dùng giá vàng gần đúng (~2650 USD/oz)
         if not price_usd:
             price_usd = 2650
             print(f"     ⚠️  Dùng giá vàng mặc định: {price_usd} USD/oz")
         
-        # Quy đổi: 1 lượng vàng = 1.20556 troy oz
-        # Giá VND/chỉ = (giá USD/oz × 1.20556 × USD/VND) / 10
         price_vnd_per_oz = price_usd * usd_vnd_rate
         price_vnd_per_luong = int(price_vnd_per_oz * 1.20556)
-        price_vnd_per_chi = price_vnd_per_luong // 10  # 1 lượng = 10 chỉ
+        price_vnd_per_chi = price_vnd_per_luong // 10
         
-        # Mock history 7 ngày (giảm dần nhẹ để tạo trend)
         base = price_vnd_per_chi
         history = [
             base - 180000,
@@ -710,7 +706,7 @@ def fetch_gold_price(usd_vnd_rate):
 
 
 def fetch_bitcoin_price(usd_vnd_rate):
-    """Lấy giá Bitcoin từ CoinGecko API (miễn phí)."""
+    """Lấy giá Bitcoin từ CoinGecko API."""
     try:
         resp = requests.get(
             "https://api.coingecko.com/api/v3/simple/price",
@@ -728,10 +724,8 @@ def fetch_bitcoin_price(usd_vnd_rate):
             change_24h = btc.get("usd_24h_change", 0)
             price_vnd = int(price_usd * usd_vnd_rate)
             
-            # Lấy history 7 ngày từ CoinGecko
             history = fetch_bitcoin_history(usd_vnd_rate)
             if not history:
-                # Fallback: mock history
                 history = [int(price_vnd * (1 - i * 0.015)) for i in range(6, -1, -1)]
             
             return {
@@ -747,7 +741,7 @@ def fetch_bitcoin_price(usd_vnd_rate):
 
 
 def fetch_bitcoin_history(usd_vnd_rate):
-    """Lấy lịch sử giá Bitcoin 7 ngày từ CoinGecko."""
+    """Lấy lịch sử giá Bitcoin 7 ngày."""
     try:
         resp = requests.get(
             "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart",
@@ -757,7 +751,6 @@ def fetch_bitcoin_history(usd_vnd_rate):
         if resp.status_code == 200:
             data = resp.json()
             prices = data.get("prices", [])
-            # prices là [[timestamp, price], ...]
             history = [int(p[1] * usd_vnd_rate) for p in prices]
             if len(history) >= 7:
                 return history[-7:]
@@ -767,8 +760,7 @@ def fetch_bitcoin_history(usd_vnd_rate):
 
 
 def build_currency_data(usd_vnd_rate, currency):
-    """Build dữ liệu cho USD/VND với history 7 ngày."""
-    # Mock history 7 ngày (biến động nhẹ)
+    """Build dữ liệu cho USD/VND."""
     history = [
         usd_vnd_rate - 30,
         usd_vnd_rate - 25,
@@ -800,7 +792,6 @@ def fetch_jpy_data(usd_vnd_rate):
             jpy_usd = data.get("rates", {}).get("USD", 0.0067)
             jpy_vnd = jpy_usd * usd_vnd_rate
             
-            # Mock history 7 ngày
             history = [round(jpy_vnd - i * 0.3, 2) for i in range(6, -1, -1)]
             change = ((jpy_vnd - history[0]) / history[0]) * 100
             
@@ -816,9 +807,7 @@ def fetch_jpy_data(usd_vnd_rate):
 
 
 def fetch_stock_movers():
-    """
-    Lấy danh sách stocks tăng/giảm 3 phiên liên tiếp từ Yahoo Finance.
-    """
+    """Lấy danh sách stocks tăng/giảm 3 phiên liên tiếp từ Yahoo Finance."""
     gainers = []
     losers = []
     
@@ -842,28 +831,24 @@ def fetch_stock_movers():
             quotes = result[0].get("indicators", {}).get("quote", [{}])[0]
             closes = quotes.get("close", [])
             
-            # Lọc bỏ None
             closes = [c for c in closes if c is not None]
             
             if len(closes) < 4:
                 continue
             
-            # Kiểm tra 3 phiên cuối (index -3, -2, -1 so với -4)
             last_3 = closes[-3:]
             prev = closes[-4]
             
-            # Tăng 3 phiên liên tiếp
             if all(last_3[i] > last_3[i-1] for i in range(1, len(last_3))) and last_3[0] > prev:
                 change_pct = ((last_3[-1] - prev) / prev) * 100
                 history = [int(c) for c in closes[-7:]] if len(closes) >= 7 else [int(c) for c in closes]
                 gainers.append({
                     "symbol": symbol,
-                    "price": int(last_3[-1] * 1000),  # Yahoo trả về giá đã chia 1000
+                    "price": int(last_3[-1] * 1000),
                     "change": round(change_pct, 2),
                     "history": history,
                 })
             
-            # Giảm 3 phiên liên tiếp
             elif all(last_3[i] < last_3[i-1] for i in range(1, len(last_3))) and last_3[0] < prev:
                 change_pct = ((last_3[-1] - prev) / prev) * 100
                 history = [int(c) for c in closes[-7:]] if len(closes) >= 7 else [int(c) for c in closes]
@@ -874,7 +859,6 @@ def fetch_stock_movers():
                     "history": history,
                 })
             
-            # Delay để tránh rate limit
             time.sleep(0.3)
             
         except Exception as e:
@@ -895,7 +879,7 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID")
 
 
 def send_telegram(message):
-    """Gửi tin nhắn Telegram, im lặng nếu chưa cấu hình."""
+    """Gửi tin nhắn Telegram."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
     try:
@@ -918,7 +902,7 @@ def send_telegram(message):
 
 
 def build_hot_news_notification(articles, ai_result):
-    """Xây dựng thông báo tin nóng từ clusters quan trọng + trends cao."""
+    """Xây dựng thông báo tin nóng."""
     clusters = ai_result.get("clusters", [])
     trends   = ai_result.get("trends", [])
     
