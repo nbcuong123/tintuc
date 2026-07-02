@@ -37,10 +37,6 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   to { opacity:1; transform:scale(1); }
 }
 @keyframes spin { to { transform:rotate(360deg); } }
-@keyframes shimmer {
-  0% { background-position:-200% 0; }
-  100% { background-position:200% 0; }
-}
 
 .fade-in { animation:fadeInUp .5s ease-out both; }
 .stagger-1 { animation-delay:.1s; }
@@ -158,7 +154,22 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .card-hd-title { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text2); }
 .card-bd { padding:12px; }
 
-/* ── TRENDS (CẢI TIẾN) ─────────────────────────────────────── */
+/* ── TABS ───────────────────────────────────────────────────── */
+.tabs {
+  display:flex; gap:4px; margin-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+.tab {
+  padding:8px 14px; font-size:11px; font-weight:600;
+  color:var(--text3); cursor:pointer; border-bottom:2px solid transparent;
+  transition:.2s; text-transform:uppercase; letter-spacing:0.5px;
+}
+.tab:hover { color:var(--text2); }
+.tab.active {
+  color:var(--accent); border-bottom-color:var(--accent);
+}
+
+/* ── TRENDS ─────────────────────────────────────────────────── */
 .trend-item {
   display:flex; gap:10px; padding:10px; border-radius:8px;
   cursor:pointer; transition:.3s; position:relative; overflow:hidden;
@@ -194,7 +205,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   background-clip:text;
 }
 .t-content { flex:1; min-width:0; }
-.t-header { display:flex; align-items:center; gap:6px; margin-bottom:2px; }
+.t-header { display:flex; align-items:center; gap:6px; margin-bottom:2px; flex-wrap:wrap; }
 .t-topic { font-size:13px; font-weight:600; }
 .t-badge {
   font-size:9px; font-weight:700; padding:2px 6px; border-radius:10px;
@@ -208,7 +219,6 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
   height:100%; border-radius:3px;
   background:linear-gradient(90deg,var(--accent),var(--accent2));
   animation:progressFill 1s ease-out both;
-  position:relative;
 }
 .trend-item.hot .t-bar-fill {
   background:linear-gradient(90deg,var(--hot),var(--accent2));
@@ -216,6 +226,81 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .t-score {
   font-size:10px; font-weight:700; color:var(--text3);
   margin-left:auto; flex-shrink:0;
+}
+
+/* ── FINANCIAL CARDS ────────────────────────────────────────── */
+.fin-grid {
+  display:grid; grid-template-columns:1fr; gap:10px;
+}
+.fin-card {
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:8px; padding:12px; transition:.3s; position:relative;
+  overflow:hidden;
+}
+.fin-card:hover {
+  border-color:var(--accent); transform:translateY(-2px);
+  box-shadow:0 4px 12px rgba(0,0,0,.2);
+}
+.fin-card.up { border-left:3px solid var(--accent3); }
+.fin-card.down { border-left:3px solid var(--danger); }
+.fin-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.fin-icon { font-size:18px; }
+.fin-name { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; flex:1; }
+.fin-price { font-family:'Playfair Display',serif; font-size:18px; font-weight:700; line-height:1; margin-bottom:4px; }
+.fin-sub { font-size:10px; color:var(--text3); margin-bottom:6px; }
+.fin-change {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px;
+}
+.fin-change.up { background:rgba(79,247,160,.15); color:var(--accent3); }
+.fin-change.down { background:rgba(247,79,79,.15); color:var(--danger); }
+.fin-sparkline {
+  margin-top:8px; height:36px; position:relative;
+}
+.fin-sparkline svg { width:100%; height:100%; display:block; }
+.fin-sparkline path {
+  fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+.fin-card.up .fin-sparkline path { stroke:var(--accent3); }
+.fin-card.down .fin-sparkline path { stroke:var(--danger); }
+
+/* ── STOCK MOVERS ───────────────────────────────────────────── */
+.movers-section { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+.movers-title {
+  font-size:11px; font-weight:700; color:var(--text2);
+  text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;
+  display:flex; align-items:center; gap:6px;
+}
+.movers-grid {
+  display:flex; flex-direction:column; gap:8px;
+}
+.movers-col-title {
+  font-size:10px; font-weight:700; padding:4px 8px; border-radius:4px;
+  text-align:center; text-transform:uppercase; letter-spacing:0.5px;
+  margin-bottom:4px;
+}
+.movers-col-title.gainers { background:rgba(79,247,160,.1); color:var(--accent3); }
+.movers-col-title.losers { background:rgba(247,79,79,.1); color:var(--danger); }
+.stock-item {
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:6px; padding:8px; transition:.2s;
+}
+.stock-item:hover { border-color:var(--accent); }
+.stock-item + .stock-item { margin-top:6px; }
+.stock-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.stock-symbol { font-size:13px; font-weight:700; }
+.stock-price { font-size:10px; color:var(--text3); margin-left:6px; font-weight:400; }
+.stock-change { font-size:11px; font-weight:600; }
+.stock-change.up { color:var(--accent3); }
+.stock-change.down { color:var(--danger); }
+.stock-sparkline { height:28px; }
+.stock-sparkline svg { width:100%; height:100%; display:block; }
+.stock-sparkline path { fill:none; stroke-width:1.5; stroke-linecap:round; }
+.stock-item.up .stock-sparkline path { stroke:var(--accent3); }
+.stock-item.down .stock-sparkline path { stroke:var(--danger); }
+.stock-empty {
+  text-align:center; padding:16px; color:var(--text3); font-size:11px;
+  font-style:italic;
 }
 
 /* ── SHARE BOX ──────────────────────────────────────────────── */
@@ -239,7 +324,7 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
 .fbtn.ec.on  { background:#f7a94f; border-color:#f7a94f; color:#000; }
 .fbtn.mu.on  { background:#da291c; border-color:#da291c; }
 
-/* ── CLUSTERS (CẢI TIẾN MẠNH) ──────────────────────────────── */
+/* ── CLUSTERS ───────────────────────────────────────────────── */
 .cl-card {
   background:var(--bg2); border:1px solid var(--border); border-radius:var(--r);
   overflow:hidden; margin-bottom:12px; transition:.3s; position:relative;
@@ -431,7 +516,23 @@ body { background:var(--bg); color:var(--text); font-family:'Be Vietnam Pro',san
     <div>
       <div class="card fade-in">
         <div class="card-hd"><span>🔥</span><span class="card-hd-title">Xu hướng hôm nay</span></div>
-        <div class="card-bd" id="trendBox"><div class="loading"><div class="loading-dot"></div></div></div>
+        <div class="card-bd">
+          <!-- TABS -->
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab('trends',this)">📈 Xu hướng</div>
+            <div class="tab" onclick="switchTab('financial',this)">💹 Thị trường</div>
+          </div>
+          
+          <!-- TAB 1: TRENDS -->
+          <div id="trendsTab">
+            <div id="trendBox"><div class="loading"><div class="loading-dot"></div></div></div>
+          </div>
+          
+          <!-- TAB 2: FINANCIAL -->
+          <div id="financialTab" style="display:none">
+            <div id="financialBox"><div class="loading"><div class="loading-dot"></div></div></div>
+          </div>
+        </div>
       </div>
       <div class="card fade-in stagger-2">
         <div class="card-hd"><span>🔗</span><span class="card-hd-title">Chia sẻ</span></div>
@@ -489,6 +590,7 @@ const R   = ref(DB);
 
 let currentDate = vnToday();
 let arts = {}, clusters = [], filter = "all";
+let financialData = null;
 window.currentDate = currentDate;
 
 function vnToday() {
@@ -516,7 +618,6 @@ function catBadge(c) {
   return `<span class="badge ${cls}">${lb}</span>`;
 }
 
-// Helper: xác định mức độ quan trọng của cluster
 function impLevel(imp) {
   imp = parseInt(imp) || 0;
   if (imp >= 8) return "high";
@@ -524,7 +625,6 @@ function impLevel(imp) {
   return "low";
 }
 
-// Helper: icon cho mức importance
 function impIcon(imp) {
   imp = parseInt(imp) || 0;
   if (imp >= 9) return "🔥";
@@ -548,13 +648,14 @@ window.addEventListener("DOMContentLoaded",()=>{
 window.loadDate=async function(date){
   setBusy(true);
   try{
-    const [aS,cS,tS,dS,gS,yS]=await Promise.all([
+    const [aS,cS,tS,dS,gS,yS,fS]=await Promise.all([
       get(child(R,`articles/${date}`)),
       get(child(R,`clusters/${date}`)),
       get(child(R,`trends/${date}`)),
       get(child(R,`digest/${date}`)),
       get(child(R,`google_trends/${date}`)),
       get(child(R,`youtube_trends/${date}`)),
+      get(child(R,`financial/${date}`)),
     ]);
     arts    = aS.exists()?aS.val():{};
     clusters= cS.exists()?toArr(cS.val()):[];
@@ -562,10 +663,12 @@ window.loadDate=async function(date){
     const digest=dS.exists()?dS.val():null;
     const gTrends=gS.exists()?toArr(gS.val()):[];
     const yTrends=yS.exists()?toArr(yS.val()):[];
+    financialData=fS.exists()?fS.val():null;
 
     renderDigest(digest);
     renderStats(arts,clusters,trends);
     renderTrends(trends);
+    renderFinancial(financialData);
     renderClusters(arts,clusters,filter);
     renderGoogle(gTrends);
     renderYoutube(yTrends);
@@ -600,26 +703,22 @@ function renderStats(a,c,t){
   animateNumber("sTrd", t.length||0);
 }
 
-// Animation đếm số
 function animateNumber(id, target) {
   const el = document.getElementById(id);
   const duration = 800;
   const start = performance.now();
-  const from = 0;
   
   function update(now) {
     const elapsed = now - start;
     const progress = Math.min(elapsed / duration, 1);
-    // Ease out cubic
     const eased = 1 - Math.pow(1 - progress, 3);
-    const current = Math.round(from + (target - from) * eased);
+    const current = Math.round(target * eased);
     el.textContent = current;
     if (progress < 1) requestAnimationFrame(update);
   }
   requestAnimationFrame(update);
 }
 
-// ── RENDER TRENDS (CẢI TIẾN) ─────────────────────────────────
 function renderTrends(t){
   const el=document.getElementById("trendBox");
   if(!t.length){el.innerHTML=emptyBox("📭","Chưa có dữ liệu");return;}
@@ -646,7 +745,161 @@ function renderTrends(t){
   }).join("");
 }
 
-// ── RENDER CLUSTERS (CẢI TIẾN MẠNH) ─────────────────────────
+// ── FINANCIAL RENDER ─────────────────────────────────────────
+function renderFinancial(data){
+  const el=document.getElementById("financialBox");
+  if(!data){
+    el.innerHTML=emptyBox("💹","Chưa có dữ liệu thị trường");
+    return;
+  }
+  
+  let html='<div class="fin-grid">';
+  
+  if(data.gold){
+    html+=renderFinCard("🥇","Vàng SJC",data.gold,"nghìn/chỉ",data.gold.priceUsd?`${data.gold.priceUsd.toLocaleString()} USD/oz`:"");
+  }
+  
+  if(data.bitcoin){
+    html+=renderFinCard("₿","Bitcoin",data.bitcoin,"VND",data.bitcoin.priceUsd?`$${data.bitcoin.priceUsd.toLocaleString()}`:"");
+  }
+  
+  if(data.usd){
+    html+=renderFinCard("💵","USD/VND",data.usd,"VND","Tỷ giá");
+  }
+  
+  if(data.jpy){
+    html+=renderFinCard("💴","Yên Nhật",data.jpy,"VND","Tỷ giá");
+  }
+  
+  html+='</div>';
+  
+  if(data.stocks){
+    html+=renderStockMovers(data.stocks);
+  }
+  
+  if(data.updatedAt){
+    const dt=new Date(data.updatedAt);
+    html+=`<div style="margin-top:10px;font-size:10px;color:var(--text3);text-align:right">Cập nhật: ${dt.toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}</div>`;
+  }
+  
+  el.innerHTML=html;
+}
+
+function renderFinCard(icon,name,data,unit,sub){
+  const isUp=data.change>=0;
+  const cls=isUp?"up":"down";
+  const arrow=isUp?"↑":"↓";
+  const price=formatFinNumber(data.price);
+  const change=data.change.toFixed(2);
+  
+  return `
+    <div class="fin-card ${cls}">
+      <div class="fin-header">
+        <div class="fin-icon">${icon}</div>
+        <div class="fin-name">${name}</div>
+      </div>
+      <div class="fin-price">${price}</div>
+      ${sub?`<div class="fin-sub">${esc(sub)}</div>`:''}
+      <div class="fin-change ${cls}">
+        ${arrow} ${Math.abs(change)}%
+      </div>
+      <div class="fin-sparkline">
+        ${renderSparkline(data.history)}
+      </div>
+    </div>
+  `;
+}
+
+function formatFinNumber(n){
+  if(n>=1e9) return (n/1e9).toFixed(2)+"B";
+  if(n>=1e6) return (n/1e6).toFixed(1)+"M";
+  if(n>=1e3) return n.toLocaleString("vi-VN");
+  if(Number.isInteger(n)) return n.toString();
+  return n.toFixed(2);
+}
+
+function renderSparkline(history){
+  if(!history||history.length<2) return "";
+  
+  const min=Math.min(...history);
+  const max=Math.max(...history);
+  const range=max-min||1;
+  const w=200;
+  const h=36;
+  const padding=2;
+  const step=(w-padding*2)/(history.length-1);
+  
+  const points=history.map((v,i)=>{
+    const x=padding+i*step;
+    const y=h-padding-((v-min)/range*(h-padding*2));
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${points}"/>
+  </svg>`;
+}
+
+function renderStockMovers(stocks){
+  let html='<div class="movers-section">';
+  html+='<div class="movers-title">📊 Stocks biến động 3 phiên</div>';
+  html+='<div class="movers-grid">';
+  
+  // Gainers
+  html+='<div>';
+  html+='<div class="movers-col-title gainers">🚀 Tăng 3 phiên</div>';
+  if(stocks.gainers&&stocks.gainers.length){
+    stocks.gainers.forEach(s=>{
+      html+=`
+        <div class="stock-item up">
+          <div class="stock-header">
+            <div>
+              <span class="stock-symbol">${s.symbol}</span>
+              <span class="stock-price">${formatFinNumber(s.price)}</span>
+            </div>
+            <div class="stock-change up">↑${s.change}%</div>
+          </div>
+          <div class="stock-sparkline">
+            ${renderSparkline(s.history)}
+          </div>
+        </div>
+      `;
+    });
+  }else{
+    html+='<div class="stock-empty">Không có mã tăng 3 phiên</div>';
+  }
+  html+='</div>';
+  
+  // Losers
+  html+='<div>';
+  html+='<div class="movers-col-title losers">📉 Giảm 3 phiên</div>';
+  if(stocks.losers&&stocks.losers.length){
+    stocks.losers.forEach(s=>{
+      html+=`
+        <div class="stock-item down">
+          <div class="stock-header">
+            <div>
+              <span class="stock-symbol">${s.symbol}</span>
+              <span class="stock-price">${formatFinNumber(s.price)}</span>
+            </div>
+            <div class="stock-change down">↓${Math.abs(s.change)}%</div>
+          </div>
+          <div class="stock-sparkline">
+            ${renderSparkline(s.history)}
+          </div>
+        </div>
+      `;
+    });
+  }else{
+    html+='<div class="stock-empty">Không có mã giảm 3 phiên</div>';
+  }
+  html+='</div>';
+  
+  html+='</div></div>';
+  return html;
+}
+
+// ── CLUSTERS RENDER ──────────────────────────────────────────
 function renderClusters(a,cls,f){
   const arr=Object.values(a);
   const byId={};
@@ -670,7 +923,6 @@ function renderClusters(a,cls,f){
     const level = impLevel(imp);
     const icon = impIcon(imp);
     
-    // Preview 2 bài đầu tiên
     const previewItems = rel.slice(0, 2).map(a => `
       <a class="cl-preview-item" href="${esc(a.url)}" target="_blank" rel="noopener">
         <span class="cl-preview-dot"></span>
@@ -679,7 +931,6 @@ function renderClusters(a,cls,f){
       </a>
     `).join("");
     
-    // Danh sách đầy đủ khi expand
     const rows=rel.map(a=>`
       <div class="art-row">
         <a class="art-title" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title_vi||a.title)}</a>
@@ -760,6 +1011,12 @@ window.doShare=function(){
     b.textContent="✓ Đã copy"; b.classList.add("ok");
     setTimeout(()=>{b.textContent="Copy";b.classList.remove("ok");},2000);
   });
+};
+window.switchTab=function(tab,btn){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("trendsTab").style.display=tab==="trends"?"block":"none";
+  document.getElementById("financialTab").style.display=tab==="financial"?"block":"none";
 };
 function setBusy(on){
   document.getElementById("btnRefresh").classList.toggle("loading",on);
