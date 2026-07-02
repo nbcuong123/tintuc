@@ -1,6 +1,6 @@
 """
-News Digest Scraper + DeepSeek AI Processor + Financial Data
-Providers: DeepSeek (ưu tiên) → Groq (fallback)
+News Digest Scraper + Multi-Provider AI Processor
+Providers: DeepSeek → Groq → Mistral → Gemini (xoay vòng)
 """
 
 import os, json, hashlib, re, time, socket, sys, signal, contextlib
@@ -33,15 +33,19 @@ def hard_timeout(seconds):
 # ─── CONFIG ───────────────────────────────────────────────────
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 GROQ_API_KEY     = os.environ.get("GROQ_API_KEY")
+MISTRAL_API_KEY  = os.environ.get("MISTRAL_API_KEY")
+GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY")
 
 FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-if not DEEPSEEK_API_KEY and not GROQ_API_KEY:
+if not any([DEEPSEEK_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, GEMINI_API_KEY]):
     raise ValueError(
         "❌ Thiếu API key!\n"
         "Hãy set ít nhất 1:\n"
-        "  • DEEPSEEK_API_KEY (khuyến nghị - https://platform.deepseek.com/)\n"
-        "  • GROQ_API_KEY (fallback - https://console.groq.com/keys)"
+        "  • GROQ_API_KEY (https://console.groq.com/keys)\n"
+        "  • MISTRAL_API_KEY (https://console.mistral.ai/)\n"
+        "  • GEMINI_API_KEY (https://aistudio.google.com/apikey)\n"
+        "  • DEEPSEEK_API_KEY (https://platform.deepseek.com/)"
     )
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -65,7 +69,6 @@ RSS_SOURCES = [
 ]
 
 MAX_ARTICLES_PER_SOURCE = 10
-# 🔑 Batch 8 bài để vừa với DeepSeek free tier (500K tokens/ngày)
 MAX_ARTICLES_FOR_AI     = 8
 
 STOCK_SYMBOLS = ["VIC", "VNM", "FPT", "HPG", "MSN", "SSI", "VCB", "CTG", "BID", "MWG"]
@@ -259,7 +262,6 @@ def validate_and_clean_clusters(result, valid_ids):
 
 # ─── GỌI TỪNG PROVIDER ────────────────────────────────────────
 def call_deepseek(prompt):
-    """Gọi DeepSeek API (tương thích OpenAI format)."""
     resp = requests.post(
         "https://api.deepseek.com/chat/completions",
         headers={
@@ -267,7 +269,7 @@ def call_deepseek(prompt):
             "Content-Type":  "application/json",
         },
         json={
-            "model":       "deepseek-chat",  # DeepSeek-V3
+            "model":       "deepseek-chat",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  8000,
@@ -283,7 +285,6 @@ def call_deepseek(prompt):
 
 
 def call_groq(prompt):
-    """Gọi Groq API (fallback)."""
     resp = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
         headers={
@@ -306,16 +307,71 @@ def call_groq(prompt):
     return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
 
 
-# Danh sách providers theo thứ tự ưu tiên
+def call_mistral(prompt):
+    resp = requests.post(
+        "https://api.mistral.ai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {MISTRAL_API_KEY}",
+            "Content-Type":  "application/json",
+        },
+        json={
+            "model":       "mistral-small-latest",
+            "messages":    [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens":  8000,
+        },
+        timeout=(10, 180),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise ValueError("Mistral trả về không có choices")
+    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
+
+
+def call_gemini(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    resp = requests.post(
+        url,
+        headers={"Content-Type": "application/json"},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 8000,
+                "responseMimeType": "application/json",
+            },
+        },
+        timeout=(10, 180),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        raise ValueError("Gemini trả về không có candidates")
+    parts = candidates[0].get("content", {}).get("parts", [])
+    if not parts:
+        raise ValueError("Gemini trả về không có parts")
+    text = parts[0].get("text", "")
+    finish = candidates[0].get("finishReason", "")
+    return text, finish
+
+
+# 🔑 Danh sách providers theo thứ tự ưu tiên (xoay vòng)
 PROVIDERS = []
 if DEEPSEEK_API_KEY:
     PROVIDERS.append(("deepseek", call_deepseek))
 if GROQ_API_KEY:
     PROVIDERS.append(("groq", call_groq))
+if MISTRAL_API_KEY:
+    PROVIDERS.append(("mistral", call_mistral))
+if GEMINI_API_KEY:
+    PROVIDERS.append(("gemini", call_gemini))
 
 
 def process_batch_with_ai(batch_articles, batch_label=""):
-    """Xử lý 1 batch, thử DeepSeek trước, Groq fallback."""
+    """Xử lý 1 batch, xoay vòng qua các providers."""
     print(f"  → Gọi AI{batch_label}...")
     subset = batch_articles[:MAX_ARTICLES_FOR_AI]
     valid_ids = {a["id"] for a in subset}
@@ -323,67 +379,55 @@ def process_batch_with_ai(batch_articles, batch_label=""):
     prompt = build_prompt(subset)
     subset_count = len(subset)
 
+    # Thử từng provider, KHÔNG retry (để tránh vượt rate limit)
     for provider_name, caller in PROVIDERS:
         print(f"  → Thử provider: {provider_name}")
         
-        # Mỗi provider retry tối đa 2 lần cho 429
-        for retry_attempt in range(2):
+        try:
+            with hard_timeout(200):
+                text, finish_reason = caller(prompt)
+            print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
+
+            if finish_reason == "length":
+                print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
+
             try:
-                with hard_timeout(200):
-                    text, finish_reason = caller(prompt)
-                print(f"  → AI response: {len(text)} chars, finish={finish_reason}")
+                result = parse_ai_response(text)
+            except json.JSONDecodeError as e:
+                print(f"  ⚠️  JSON parse lỗi: {e}")
+                continue  # Thử provider khác
 
-                if finish_reason == "length":
-                    print(f"  ⚠️  Response bị cắt ngang. Đang repair...")
+            # Kiểm tra chất lượng
+            arts_vi = result.get("articles_vi", [])
+            en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
+            vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
+            poorly_translated = 0
+            for eid in en_ids_in_subset:
+                item = vi_lookup.get(eid)
+                t_vi = (item.get("title_vi") or "").strip() if item else ""
+                orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
+                if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
+                    poorly_translated += 1
 
-                try:
-                    result = parse_ai_response(text)
-                except json.JSONDecodeError as e:
-                    print(f"  ⚠️  JSON parse lỗi: {e}")
-                    break  # Lỗi parse → thử provider khác
+            if len(arts_vi) < subset_count or poorly_translated > 0:
+                print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
+                result = retry_ai(provider_name, caller, subset, prompt, result, valid_ids)
 
-                # Kiểm tra chất lượng
-                arts_vi = result.get("articles_vi", [])
-                en_ids_in_subset = {a["id"] for a in subset if a.get("lang") == "en"}
-                vi_lookup = {item.get("id"): item for item in arts_vi if "id" in item}
-                poorly_translated = 0
-                for eid in en_ids_in_subset:
-                    item = vi_lookup.get(eid)
-                    t_vi = (item.get("title_vi") or "").strip() if item else ""
-                    orig_title = next((a["title"] for a in subset if a["id"] == eid), "")
-                    if not t_vi or t_vi == orig_title or len(t_vi) <= 5:
-                        poorly_translated += 1
+            result = validate_and_clean_clusters(result, valid_ids)
+            clusters = result.get("clusters", [])
+            trends   = result.get("trends", [])
+            arts_vi  = result.get("articles_vi", [])
+            print(f"  ✅ AI xong ({provider_name}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
+            return result
 
-                if len(arts_vi) < subset_count or poorly_translated > 0:
-                    print(f"  ⚠️  AI thiếu: {len(arts_vi)}/{subset_count} bài, {poorly_translated} bài EN dịch kém. Retry...")
-                    result = retry_ai(provider_name, caller, subset, prompt, result, valid_ids)
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "?"
+            print(f"  ⚠️  {provider_name} HTTP {status}. Chuyển provider khác...")
+            continue  # Thử provider khác
 
-                result = validate_and_clean_clusters(result, valid_ids)
-                clusters = result.get("clusters", [])
-                trends   = result.get("trends", [])
-                arts_vi  = result.get("articles_vi", [])
-                print(f"  ✅ AI xong ({provider_name}): {len(arts_vi)} bài, {len(clusters)} clusters, {len(trends)} trends")
-                return result
-
-            except requests.exceptions.HTTPError as e:
-                status = e.response.status_code if e.response is not None else "?"
-                
-                if status == 429:
-                    if retry_attempt == 0:
-                        wait_time = 30
-                        print(f"  ⚠️  {provider_name} rate limit (429). Chờ {wait_time}s...")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        print(f"  ⚠️  {provider_name} vẫn 429. Chuyển provider khác...")
-                        break
-                else:
-                    print(f"  ⚠️  {provider_name} HTTP {status}: {str(e)[:120]}")
-                    break
-
-            except Exception as e:
-                print(f"  ⚠️  {provider_name} lỗi: {str(e)[:150]}")
-                break
+        except Exception as e:
+            print(f"  ⚠️  {provider_name} lỗi: {str(e)[:150]}")
+            continue  # Thử provider khác
 
     print(f"  ❌ Tất cả providers đều thất bại")
     return fallback_result()
@@ -466,10 +510,10 @@ def process_with_ai(articles):
         label = f" [batch {i}/{len(batches)}, {len(batch)} bài]"
         batch_result = process_batch_with_ai(batch, batch_label=label)
 
-        # 🔑 Delay 30s giữa các batch - DeepSeek hào phóng hơn Groq nhiều
+        # 🔑 Delay 90s giữa các batch để tránh rate limit
         if i < len(batches):
-            print(f"  ⏳ Chờ 30s trước khi gọi batch tiếp theo...")
-            time.sleep(30)
+            print(f"  ⏳ Chờ 90s trước khi gọi batch tiếp theo...")
+            time.sleep(90)
 
         merged_articles_vi.extend(batch_result.get("articles_vi", []))
         merged_clusters.extend(batch_result.get("clusters", []))
@@ -1027,12 +1071,12 @@ def main():
     print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
     print("🔑 API keys status:")
-    for key in ["DEEPSEEK_API_KEY", "GROQ_API_KEY", "TELEGRAM_BOT_TOKEN"]:
+    for key in ["DEEPSEEK_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY", "GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN"]:
         val = os.environ.get(key)
         status = f"✅ có ({len(val)} ký tự)" if val else "❌ KHÔNG CÓ"
         print(f"   • {key}: {status}")
 
-    print("\n🔌 AI providers:")
+    print("\n🔌 AI providers (xoay vòng):")
     for pname, _ in PROVIDERS:
         print(f"   • {pname}")
 
