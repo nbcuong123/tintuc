@@ -303,6 +303,58 @@ body {
 .yt-ch { font-size:11px; color:var(--text3); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .yt-views { color:var(--accent2); }
 
+/* ── THỊ TRƯỜNG (FINANCIAL) ── */
+.fin-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+.fin-card {
+  background:var(--bg3); border:1px solid var(--border); border-radius:10px;
+  padding:14px; position:relative; overflow:hidden; transition:.2s;
+}
+.fin-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+.fin-card.up::before, .fin-card.down::before {
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+}
+.fin-card.up::before { background:linear-gradient(90deg,var(--accent3),transparent); }
+.fin-card.down::before { background:linear-gradient(90deg,var(--hot),transparent); }
+.fin-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.fin-icon { font-size:18px; line-height:1; }
+.fin-name { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+.fin-price { font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--text); line-height:1.2; }
+.fin-sub { font-size:10px; color:var(--text3); margin-top:2px; }
+.fin-change { font-size:12px; font-weight:700; margin-top:6px; display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:10px; }
+.fin-change.up { color:var(--accent3); background:rgba(79,247,160,.1); }
+.fin-change.down { color:var(--hot); background:rgba(247,79,79,.1); }
+.fin-sparkline { margin-top:10px; height:36px; }
+.fin-sparkline svg { width:100%; height:100%; }
+.fin-sparkline polyline { fill:none; stroke-width:1.8; }
+.fin-card.up .fin-sparkline polyline { stroke:var(--accent3); }
+.fin-card.down .fin-sparkline polyline { stroke:var(--hot); }
+
+.movers-section { margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+.movers-title { font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; }
+.movers-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.movers-col-title { font-size:11px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:4px; }
+.movers-col-title.gainers { color:var(--accent3); }
+.movers-col-title.losers { color:var(--hot); }
+.stock-item {
+  background:var(--bg3); border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px; margin-bottom:6px; transition:.2s;
+}
+.stock-item:hover { border-color:var(--accent); }
+.stock-item.up { border-left:3px solid var(--accent3); }
+.stock-item.down { border-left:3px solid var(--hot); }
+.stock-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.stock-symbol { font-size:13px; font-weight:700; color:var(--text); margin-right:8px; }
+.stock-price { font-size:12px; color:var(--text2); }
+.stock-change { font-size:12px; font-weight:700; white-space:nowrap; }
+.stock-change.up { color:var(--accent3); }
+.stock-change.down { color:var(--hot); }
+.stock-sparkline { margin-top:6px; height:24px; }
+.stock-sparkline svg { width:100%; height:100%; }
+.stock-sparkline polyline { fill:none; stroke-width:1.5; }
+.stock-item.up .stock-sparkline polyline { stroke:var(--accent3); }
+.stock-item.down .stock-sparkline polyline { stroke:var(--hot); }
+.stock-empty { font-size:12px; color:var(--text3); padding:16px 0; text-align:center; font-style:italic; }
+
 .empty { text-align:center; padding:40px 20px; color:var(--text3); }
 .empty-ic { font-size:32px; margin-bottom:8px; opacity: 0.5; }
 .empty-tx { font-size:13px; font-weight:600; color:var(--text2); }
@@ -319,7 +371,7 @@ body {
 @media(max-width:1200px) {
   .grid { grid-template-columns:1fr; }
   .cluster-wrapper { max-height: none !important; }
-  .cluster-wrapper::after { display: none !important; }
+  .cluster-wrapper::after { display: none; }
   .view-more-btn { display: none !important; }
 }
 @media(max-width:900px) {
@@ -366,17 +418,17 @@ body {
   <div class="stats">
     <div class="stat fade-in stagger-1"><div class="stat-ic">📰</div><div class="stat-n" id="sArt">—</div><div class="stat-l">Bài báo</div></div>
     <div class="stat fade-in stagger-2"><div class="stat-ic">🎯</div><div class="stat-n" id="sClu">—</div><div class="stat-l">Chủ đề</div></div>
-    <div class="stat fade-in stagger-3"><div class="stat-ic">📡</div><div class="stat-n" id="sSrc">—</div><div class="stat-l">Nguồn tin</div></div>
+    <div class="stat fade-in stagger-3"><div class="stat-ic"></div><div class="stat-n" id="sSrc">—</div><div class="stat-l">Nguồn tin</div></div>
     <div class="stat fade-in stagger-4"><div class="stat-ic">📈</div><div class="stat-n" id="sTrd">—</div><div class="stat-l">Xu hướng</div></div>
   </div>
 
   <div class="grid">
     <div class="sidebar-col" id="sidebarCol">
       <div class="card fade-in">
-        <div class="card-hd"><span>🔥</span><span class="card-hd-title">Xu hướng hôm nay</span></div>
+        <div class="card-hd"><span></span><span class="card-hd-title">Xu hướng hôm nay</span></div>
         <div class="card-bd">
           <div class="tabs">
-            <div class="tab active" onclick="switchTab('trends',this)">📈 Xu hướng</div>
+            <div class="tab active" onclick="switchTab('trends',this)"> Xu hướng</div>
             <div class="tab" onclick="switchTab('financial',this)">💹 Thị trường</div>
           </div>
           <div id="trendsTab">
@@ -401,15 +453,15 @@ body {
     <div class="cluster-col">
       <div class="filters">
         <button class="fbtn on" onclick="setF('all',this)">Tất cả</button>
-        <button class="fbtn vn" onclick="setF('vn',this)">🇳 Việt Nam</button>
+        <button class="fbtn vn" onclick="setF('vn',this)">🇻🇳 Việt Nam</button>
         <button class="fbtn wo" onclick="setF('world',this)">🌍 Quốc tế</button>
         <button class="fbtn ec" onclick="setF('economy',this)">💹 Kinh tế</button>
-        <button class="fbtn mu" onclick="setF('mu',this)"> MU</button>
+        <button class="fbtn mu" onclick="setF('mu',this)">🔴 MU</button>
       </div>
       <div class="cluster-wrapper" id="clusterWrapper">
         <div id="clusterBox"><div class="loading"><div class="loading-dot"></div></div></div>
       </div>
-      <button class="view-more-btn" id="viewMoreBtn" onclick="toggleViewMore()">⬇ Xem thêm tất cả chủ đề</button>
+      <button class="view-more-btn hidden" id="viewMoreBtn" onclick="toggleViewMore()">⬇ Xem thêm tất cả chủ đề</button>
     </div>
   </div>
 
@@ -457,54 +509,7 @@ function fmt(n) { n=parseInt(n)||0; return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?
 function emptyBox(ic,tx) { return `<div class="empty"><div class="empty-ic">${ic}</div><div class="empty-tx">${tx}</div></div>`; }
 function catBadge(c) { const m={vn:["bvn","VN"],world:["bwo","Quốc tế"],economy:["bec","Kinh tế"],mu:["bmu","MU"]}; const [cls,lb]=m[c]||["bvn",c]; return `<span class="badge ${cls}">${lb}</span>`; }
 function impLevel(imp) { imp = parseInt(imp) || 0; if (imp >= 8) return "high"; if (imp >= 6) return "med"; return "low"; }
-function impIcon(imp) { imp = parseInt(imp) || 0; if (imp >= 9) return "🔥"; if (imp >= 8) return "⭐"; if (imp >= 6) return "📌"; return "📰"; }
-
-// 🔑 HÀM ĐO CHIỀU CAO THỰC CỦA SIDEBAR
-function syncSidebarHeight() {
-  const sidebar = document.getElementById("sidebarCol");
-  const wrapper = document.getElementById("clusterWrapper");
-  if (!sidebar || !wrapper) return;
-  
-  const sidebarH = sidebar.offsetHeight;
-  // Chỉ sync khi sidebar có nội dung (không phải 0)
-  if (sidebarH > 100) {
-    // Set CSS variable = chiều cao thực + 16px (padding gap)
-    document.documentElement.style.setProperty('--sidebar-h', (sidebarH + 16) + 'px');
-  }
-}
-
-// 🔑 HÀM KIỂM TRA NÚT XEM THÊM
-function checkViewMore() {
-  const wrapper = document.getElementById("clusterWrapper");
-  const btn = document.getElementById("viewMoreBtn");
-  if (!wrapper || !btn) return;
-  
-  const sidebarH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-h')) || 700;
-  const contentH = wrapper.scrollHeight;
-  
-  if (contentH > sidebarH + 30) {
-    btn.classList.remove("hidden");
-    btn.textContent = "⬇ Xem thêm tất cả chủ đề";
-  } else {
-    btn.classList.add("hidden");
-  }
-}
-
-// 🔑 TOGGLE XEM THÊM / THU GỌN
-window.toggleViewMore = function() {
-  const wrapper = document.getElementById("clusterWrapper");
-  const btn = document.getElementById("viewMoreBtn");
-  if (!wrapper || !btn) return;
-  
-  if (wrapper.classList.contains("expanded")) {
-    wrapper.classList.remove("expanded");
-    btn.textContent = "⬇ Xem thêm tất cả chủ đề";
-    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } else {
-    wrapper.classList.add("expanded");
-    btn.textContent = "⬆ Thu gọn";
-  }
-};
+function impIcon(imp) { imp = parseInt(imp) || 0; if (imp >= 9) return ""; if (imp >= 8) return "⭐"; if (imp >= 6) return ""; return "📰"; }
 
 window.addEventListener("DOMContentLoaded",()=>{
   const dp=document.getElementById("datePicker");
@@ -516,11 +521,11 @@ window.addEventListener("DOMContentLoaded",()=>{
   const p=new URLSearchParams(location.search);
   if(p.get("date")){currentDate=p.get("date");dp.value=currentDate;}
   loadDate(currentDate);
-  
-  // 🔑 Lắng nghe resize window để đo lại chiều cao
-  window.addEventListener('resize', () => {
-    setTimeout(syncSidebarHeight, 100);
-    setTimeout(checkViewMore, 150);
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { syncSidebarHeight(); checkViewMore(); }, 150);
   });
 });
 
@@ -544,11 +549,57 @@ window.loadDate=async function(date){
       const dt=new Date(digest.updatedAt);
       document.getElementById("updatedAt").textContent=`Cập nhật lúc ${dt.toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})} ngày ${dt.toLocaleDateString("vi-VN")}`;
     }
-    // 🔑 Đo chiều cao sidebar sau khi render xong
-    setTimeout(syncSidebarHeight, 100);
-    setTimeout(checkViewMore, 200);
+    setTimeout(() => { syncSidebarHeight(); checkViewMore(); }, 200);
   }catch(e){toast("Lỗi: "+e.message,"err");}
   finally{setBusy(false);}
+};
+
+function syncSidebarHeight() {
+  const sidebar = document.getElementById("sidebarCol");
+  const wrapper = document.getElementById("clusterWrapper");
+  if (!sidebar || !wrapper) return;
+  if (wrapper.classList.contains("expanded")) return;
+
+  const h = sidebar.offsetHeight;
+  if (h > 0) {
+    wrapper.style.maxHeight = h + "px";
+  }
+}
+
+function checkViewMore() {
+  const wrapper = document.getElementById("clusterWrapper");
+  const btn = document.getElementById("viewMoreBtn");
+  const sidebar = document.getElementById("sidebarCol");
+  if (!wrapper || !btn || !sidebar) return;
+
+  const sidebarH = sidebar.offsetHeight || 700;
+  const contentH = wrapper.scrollHeight;
+
+  if (contentH > sidebarH + 30) {
+    btn.classList.remove("hidden");
+    if (!wrapper.classList.contains("expanded")) {
+      btn.textContent = "⬇ Xem thêm tất cả chủ đề";
+    }
+  } else {
+    btn.classList.add("hidden");
+  }
+}
+
+window.toggleViewMore = function() {
+  const wrapper = document.getElementById("clusterWrapper");
+  const btn = document.getElementById("viewMoreBtn");
+  if (!wrapper || !btn) return;
+
+  if (wrapper.classList.contains("expanded")) {
+    wrapper.classList.remove("expanded");
+    syncSidebarHeight();
+    btn.textContent = "⬇ Xem thêm tất cả chủ đề";
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    wrapper.classList.add("expanded");
+    wrapper.style.maxHeight = "5000px";
+    btn.textContent = "⬆ Thu gọn";
+  }
 };
 
 function renderDigest(d){
@@ -580,7 +631,7 @@ function animateNumber(id, target) {
 
 function renderTrends(t){
   const el=document.getElementById("trendBox");
-  if(!t.length){el.innerHTML=emptyBox("","Chưa có dữ liệu");return;}
+  if(!t.length){el.innerHTML=emptyBox("📭","Chưa có dữ liệu");return;}
   const rc=r=>r===1?"r1":r===2?"r2":r===3?"r3":"";
   el.innerHTML=t.map((x,i)=>{
     const isHot = x.rank === 1 || (x.score||0) >= 90;
@@ -595,10 +646,6 @@ function renderTrends(t){
       <div class="t-score">${x.score||0}</div>
     </div>`;
   }).join("");
-  
-  // 🔑 Sau khi render trends → đo lại chiều cao sidebar
-  setTimeout(syncSidebarHeight, 50);
-  setTimeout(checkViewMore, 100);
 }
 
 function renderFinancial(data){
@@ -607,16 +654,12 @@ function renderFinancial(data){
   let html='<div class="fin-grid">';
   if(data.gold) html+=renderFinCard("🥇","Vàng SJC",data.gold,"nghìn/chỉ",data.gold.priceUsd?`${data.gold.priceUsd.toLocaleString()} USD/oz`:"");
   if(data.bitcoin) html+=renderFinCard("₿","Bitcoin",data.bitcoin,"VND",data.bitcoin.priceUsd?`$${data.bitcoin.priceUsd.toLocaleString()}`:"");
-  if(data.usd) html+=renderFinCard("💵","USD/VND",data.usd,"VND","Tỷ giá");
+  if(data.usd) html+=renderFinCard("","USD/VND",data.usd,"VND","Tỷ giá");
   if(data.jpy) html+=renderFinCard("💴","Yên Nhật",data.jpy,"VND","Tỷ giá");
   html+='</div>';
   if(data.stocks) html+=renderStockMovers(data.stocks);
   if(data.updatedAt){ const dt=new Date(data.updatedAt); html+=`<div style="margin-top:12px;font-size:10px;color:var(--text3);text-align:right;font-weight:500">Cập nhật: ${dt.toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}</div>`; }
   el.innerHTML=html;
-  
-  // 🔑 Sau khi render financial → đo lại chiều cao sidebar
-  setTimeout(syncSidebarHeight, 50);
-  setTimeout(checkViewMore, 100);
 }
 
 function renderFinCard(icon,name,data,unit,sub){
@@ -641,11 +684,11 @@ function renderSparkline(history){
 }
 
 function renderStockMovers(stocks){
-  let html='<div class="movers-section"><div class="movers-title"> Stocks biến động 3 phiên</div><div class="movers-grid">';
-  html+='<div><div class="movers-col-title gainers"> Tăng 3 phiên</div>';
+  let html='<div class="movers-section"><div class="movers-title">📊 Stocks biến động 3 phiên</div><div class="movers-grid">';
+  html+='<div><div class="movers-col-title gainers">🚀 Tăng 3 phiên</div>';
   if(stocks.gainers&&stocks.gainers.length){ stocks.gainers.forEach(s=>{ html+=`<div class="stock-item up"><div class="stock-header"><div><span class="stock-symbol">${s.symbol}</span><span class="stock-price">${formatFinNumber(s.price)}</span></div><div class="stock-change up">↑${s.change}%</div></div><div class="stock-sparkline">${renderSparkline(s.history)}</div></div>`; }); }
   else { html+='<div class="stock-empty">Không có mã tăng 3 phiên</div>'; }
-  html+='</div><div><div class="movers-col-title losers"> Giảm 3 phiên</div>';
+  html+='</div><div><div class="movers-col-title losers">📉 Giảm 3 phiên</div>';
   if(stocks.losers&&stocks.losers.length){ stocks.losers.forEach(s=>{ html+=`<div class="stock-item down"><div class="stock-header"><div><span class="stock-symbol">${s.symbol}</span><span class="stock-price">${formatFinNumber(s.price)}</span></div><div class="stock-change down">↓${Math.abs(s.change)}%</div></div><div class="stock-sparkline">${renderSparkline(s.history)}</div></div>`; }); }
   else { html+='<div class="stock-empty">Không có mã giảm 3 phiên</div>'; }
   html+='</div></div></div>'; return html;
@@ -666,7 +709,7 @@ function renderClusters(a,cls,f){
       <div class="cl-hd" onclick="toggleCl(${ci})">
         <div class="cl-num ${level}">${imp}<span class="cl-num-icon">${icon}</span></div>
         <div class="cl-main">
-          <div class="cl-title-row"><div class="cl-title">${esc(c.topic)}</div><span class="cl-count"> ${rel.length} bài</span></div>
+          <div class="cl-title-row"><div class="cl-title">${esc(c.topic)}</div><span class="cl-count">📎 ${rel.length} bài</span></div>
           <div class="cl-sum">${esc(c.summary||"")}</div>
           ${previewItems && rel.length > 2 ? `<div class="cl-preview">${previewItems}</div>` : ''}
         </div>
@@ -675,8 +718,8 @@ function renderClusters(a,cls,f){
       <div class="cl-body" id="cb${ci}">${rows||emptyBox("","Không có bài")}</div>
     </div>`;
   }).join("");
-  
-  setTimeout(checkViewMore, 150);
+
+  setTimeout(() => { syncSidebarHeight(); checkViewMore(); }, 150);
 }
 
 function renderGoogle(items){
@@ -692,20 +735,9 @@ function renderYoutube(items){
 }
 
 window.setF=function(f,btn){ filter=f; document.querySelectorAll(".fbtn").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); renderClusters(arts,clusters,f); };
-window.toggleCl=function(i){ const b=document.getElementById("cb"+i), a=document.getElementById("ca"+i); a.classList.toggle("open",b.classList.toggle("open")); };
+window.toggleCl=function(i){ const b=document.getElementById("cb"+i), a=document.getElementById("ca"+i); a.classList.toggle("open",b.classList.toggle("open")); setTimeout(()=>{ syncSidebarHeight(); checkViewMore(); }, 320); };
 window.doShare=function(){ const url=`${location.origin}${location.pathname}?date=${currentDate}`; document.getElementById("shareUrl").value=url; navigator.clipboard.writeText(url).then(()=>{ const b=document.getElementById("btnCopy"); b.textContent="✓ Đã copy"; b.classList.add("ok"); setTimeout(()=>{b.textContent="Copy";b.classList.remove("ok");},2000); }); };
-
-// 🔑 ĐO LẠI CHIỀU CAO KHI ĐỔI TAB
-window.switchTab=function(tab,btn){ 
-  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); 
-  btn.classList.add("active"); 
-  document.getElementById("trendsTab").style.display=tab==="trends"?"block":"none"; 
-  document.getElementById("financialTab").style.display=tab==="financial"?"block":"none";
-  // Đo lại chiều cao sidebar sau khi đổi tab
-  setTimeout(syncSidebarHeight, 50);
-  setTimeout(checkViewMore, 100);
-};
-
+window.switchTab=function(tab,btn){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); btn.classList.add("active"); document.getElementById("trendsTab").style.display=tab==="trends"?"block":"none"; document.getElementById("financialTab").style.display=tab==="financial"?"block":"none"; setTimeout(()=>{ syncSidebarHeight(); checkViewMore(); }, 50); };
 function setBusy(on){ document.getElementById("btnRefresh").classList.toggle("loading",on); const ic=document.getElementById("refreshIc"); ic.classList.toggle("spin",on); }
 function toast(msg,type="ok"){ const t=document.getElementById("toast"); t.textContent=msg; t.className=`toast ${type} show`; setTimeout(()=>t.classList.remove("show"),3000); }
 window.showToast=toast;
