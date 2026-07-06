@@ -353,6 +353,38 @@ body {
 .stock-sparkline polyline { fill:none; stroke-width:1.5; }
 .stock-item.up .stock-sparkline polyline { stroke:var(--accent3); }
 .stock-item.down .stock-sparkline polyline { stroke:var(--hot); }
+.stock-extra { font-size:10px; color:var(--text3); margin-top:6px; }
+
+.std-table-wrap { overflow-x:auto; margin-top:4px; }
+.std-table { width:100%; border-collapse:collapse; font-size:11px; }
+.std-table th { text-align:left; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; font-size:10px; padding:6px 8px; border-bottom:1px solid var(--border); }
+.std-table td { padding:6px 8px; border-bottom:1px solid var(--border); color:var(--text2); white-space:nowrap; }
+.std-sym { font-weight:700; color:var(--text); }
+.std-chg.up { color:var(--accent3); font-weight:700; }
+.std-chg.down { color:var(--hot); font-weight:700; }
+
+.gt-row-wrap { display:flex; flex-direction:column; }
+.gt-detail-btn { align-self:flex-start; margin:2px 0 6px 32px; background:none; border:none; color:var(--accent); font-size:10px; cursor:pointer; font-family:inherit; padding:0; }
+.gt-detail-btn:hover { text-decoration:underline; }
+.gt-detail { display:none; margin:0 12px 8px 32px; padding:8px 10px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; font-size:11px; color:var(--text2); }
+.gt-detail.open { display:block; }
+.gt-detail-spark { height:28px; margin-bottom:6px; }
+.gt-detail-spark svg { width:100%; height:100%; }
+.gt-detail-spark polyline { fill:none; stroke:var(--accent); stroke-width:1.5; }
+.gt-detail-row { margin-top:4px; line-height:1.5; }
+.gt-detail-row b { color:var(--text); }
+
+.prod-theme { margin-bottom:16px; }
+.prod-theme-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:8px; }
+.prod-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+.prod-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:12px; transition:.2s; }
+.prod-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+.prod-hd { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.prod-name { font-size:12px; font-weight:700; color:var(--text); }
+.prod-demand { font-size:10px; font-weight:700; color:var(--accent2); background:rgba(247,169,79,.12); padding:2px 6px; border-radius:8px; flex-shrink:0; }
+.prod-cat { font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; margin-bottom:6px; }
+.prod-reason { font-size:11px; color:var(--text2); line-height:1.5; }
+.prod-audience { font-size:10px; color:var(--text3); margin-top:6px; }
 .stock-empty { font-size:12px; color:var(--text3); padding:16px 0; text-align:center; font-style:italic; }
 
 .empty { text-align:center; padding:40px 20px; color:var(--text3); }
@@ -430,12 +462,16 @@ body {
           <div class="tabs">
             <div class="tab active" onclick="switchTab('trends',this)"> Xu hướng</div>
             <div class="tab" onclick="switchTab('financial',this)">💹 Thị trường</div>
+            <div class="tab" onclick="switchTab('products',this)">🛍️ Bán kèm</div>
           </div>
           <div id="trendsTab">
             <div id="trendBox"><div class="loading"><div class="loading-dot"></div></div></div>
           </div>
           <div id="financialTab" style="display:none">
             <div id="financialBox"><div class="loading"><div class="loading-dot"></div></div></div>
+          </div>
+          <div id="productsTab" style="display:none">
+            <div id="productsBox"><div class="loading"><div class="loading-dot"></div></div></div>
           </div>
         </div>
       </div>
@@ -532,18 +568,21 @@ window.addEventListener("DOMContentLoaded",()=>{
 window.loadDate=async function(date){
   setBusy(true);
   try{
-    const [aS,cS,tS,dS,gS,yS,fS]=await Promise.all([
+    const [aS,cS,tS,dS,gS,yS,fS,tdS,pS]=await Promise.all([
       get(child(R,`articles/${date}`)), get(child(R,`clusters/${date}`)), get(child(R,`trends/${date}`)),
       get(child(R,`digest/${date}`)), get(child(R,`google_trends/${date}`)), get(child(R,`youtube_trends/${date}`)), get(child(R,`financial/${date}`)),
+      get(child(R,`trends_detail/${date}`)), get(child(R,`products/${date}`)),
     ]);
     arts = aS.exists()?aS.val():{}; clusters = cS.exists()?toArr(cS.val()):[];
     const trends=tS.exists()?toArr(tS.val()):[]; const digest=dS.exists()?dS.val():null;
     const gTrends=gS.exists()?toArr(gS.val()):[]; const yTrends=yS.exists()?toArr(yS.val()):[];
     financialData=fS.exists()?fS.val():null;
+    const trendsDetail=tdS.exists()?toArr(tdS.val()):[]; const products=pS.exists()?toArr(pS.val()):[];
 
     renderDigest(digest); renderStats(arts,clusters,trends); renderTrends(trends);
     renderFinancial(financialData); renderClusters(arts,clusters,filter);
-    renderGoogle(gTrends); renderYoutube(yTrends);
+    renderGoogle(gTrends, trendsDetail); renderYoutube(yTrends);
+    renderProducts(products);
     document.getElementById("btnNext").disabled=date>=vnToday();
     if(digest?.updatedAt){
       const dt=new Date(digest.updatedAt);
@@ -652,6 +691,7 @@ function renderFinancial(data){
   const el=document.getElementById("financialBox");
   if(!data){el.innerHTML=emptyBox("💹","Chưa có dữ liệu thị trường");return;}
   let html='<div class="fin-grid">';
+  if(data.stocks?.index) html+=renderFinCard("📊","VN-Index",data.stocks.index,"điểm","Chỉ số tham chiếu (1 tháng)");
   if(data.gold) html+=renderFinCard("🥇","Vàng SJC",data.gold,"nghìn/chỉ",data.gold.priceUsd?`${data.gold.priceUsd.toLocaleString()} USD/oz`:"");
   if(data.bitcoin) html+=renderFinCard("₿","Bitcoin",data.bitcoin,"VND",data.bitcoin.priceUsd?`$${data.bitcoin.priceUsd.toLocaleString()}`:"");
   if(data.usd) html+=renderFinCard("","USD/VND",data.usd,"VND","Tỷ giá");
@@ -686,12 +726,45 @@ function renderSparkline(history){
 function renderStockMovers(stocks){
   let html='<div class="movers-section"><div class="movers-title">📊 Stocks biến động 3 phiên</div><div class="movers-grid">';
   html+='<div><div class="movers-col-title gainers">🚀 Tăng 3 phiên</div>';
-  if(stocks.gainers&&stocks.gainers.length){ stocks.gainers.forEach(s=>{ html+=`<div class="stock-item up"><div class="stock-header"><div><span class="stock-symbol">${s.symbol}</span><span class="stock-price">${formatFinNumber(s.price)}</span></div><div class="stock-change up">↑${s.change}%</div></div><div class="stock-sparkline">${renderSparkline(s.history)}</div></div>`; }); }
+  if(stocks.gainers&&stocks.gainers.length){ stocks.gainers.forEach(s=>{ html+=renderStockItem(s,"up","↑"); }); }
   else { html+='<div class="stock-empty">Không có mã tăng 3 phiên</div>'; }
   html+='</div><div><div class="movers-col-title losers">📉 Giảm 3 phiên</div>';
-  if(stocks.losers&&stocks.losers.length){ stocks.losers.forEach(s=>{ html+=`<div class="stock-item down"><div class="stock-header"><div><span class="stock-symbol">${s.symbol}</span><span class="stock-price">${formatFinNumber(s.price)}</span></div><div class="stock-change down">↓${Math.abs(s.change)}%</div></div><div class="stock-sparkline">${renderSparkline(s.history)}</div></div>`; }); }
+  if(stocks.losers&&stocks.losers.length){ stocks.losers.forEach(s=>{ html+=renderStockItem(s,"down","↓"); }); }
   else { html+='<div class="stock-empty">Không có mã giảm 3 phiên</div>'; }
-  html+='</div></div></div>'; return html;
+  html+='</div></div>';
+  if(stocks.all&&stocks.all.length) html+=renderStockDetailTable(stocks.all);
+  html+='</div>'; return html;
+}
+
+function renderStockItem(s,cls,arrow){
+  const extra=[];
+  if(s.volume) extra.push(`KL: ${fmt(s.volume)}`);
+  if(s.high1m&&s.low1m) extra.push(`1m: ${formatFinNumber(s.low1m)}–${formatFinNumber(s.high1m)}`);
+  return `<div class="stock-item ${cls}">
+    <div class="stock-header"><div><span class="stock-symbol">${s.symbol}</span><span class="stock-price">${formatFinNumber(s.price)}</span></div><div class="stock-change ${cls}">${arrow}${Math.abs(s.change)}%</div></div>
+    <div class="stock-sparkline">${renderSparkline(s.history)}</div>
+    ${extra.length?`<div class="stock-extra">${extra.join(" · ")}</div>`:""}
+  </div>`;
+}
+
+function renderStockDetailTable(all){
+  const rows=all.slice(0,20).map(s=>{
+    const cls=s.change>=0?"up":"down"; const arrow=s.change>=0?"↑":"↓";
+    return `<tr>
+      <td class="std-sym">${s.symbol}</td>
+      <td>${formatFinNumber(s.price)}</td>
+      <td class="std-chg ${cls}">${arrow}${Math.abs(s.change)}%</td>
+      <td>${s.volume?fmt(s.volume):"—"}</td>
+      <td>${s.low1m&&s.high1m?`${formatFinNumber(s.low1m)}–${formatFinNumber(s.high1m)}`:"—"}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="movers-section">
+    <div class="movers-title">📋 Chi tiết theo dõi (${all.length} mã)</div>
+    <div class="std-table-wrap"><table class="std-table">
+      <thead><tr><th>Mã</th><th>Giá</th><th>Biến động</th><th>KL</th><th>Cao/thấp 1m</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
 }
 
 function renderClusters(a,cls,f){
@@ -722,10 +795,46 @@ function renderClusters(a,cls,f){
   setTimeout(() => { syncSidebarHeight(); checkViewMore(); }, 150);
 }
 
-function renderGoogle(items){
+function renderGoogle(items, trendsDetail){
   const el=document.getElementById("gtBox");
   if(!items.length){el.innerHTML=emptyBox("🔍","Chưa có dữ liệu");return;}
-  el.innerHTML=`<div class="gt-grid">${items.slice(0,10).map((t,i)=>{ const kw=t.keyword||t.query||""; const vol=t.traffic||""; const url=(t.news_items||[])[0]?.url||"#"; return `<a class="gt-row" href="${esc(url)}" target="_blank" rel="noopener" style="animation:fadeInUp .4s ease-out ${i*0.05}s both"><span class="gt-num ${i<3?"hot":""}">${i+1}</span><span class="gt-kw">${esc(kw)}</span>${vol?`<span class="gt-vol">${esc(vol)}</span>`:""}</a>`; }).join("")}</div>`;
+  const detailByKw={}; (trendsDetail||[]).forEach(d=>{ detailByKw[d.keyword]=d; });
+  el.innerHTML=`<div class="gt-grid">${items.slice(0,10).map((t,i)=>{
+    const kw=t.keyword||t.query||""; const vol=t.traffic||""; const url=(t.news_items||[])[0]?.url||"#";
+    const d=detailByKw[kw];
+    const hasDetail=d&&((d.related_top&&d.related_top.length)||(d.related_rising&&d.related_rising.length)||(d.history&&d.history.length>1));
+    const row=`<div class="gt-row-wrap" style="animation:fadeInUp .4s ease-out ${i*0.05}s both">
+      <a class="gt-row" href="${esc(url)}" target="_blank" rel="noopener"><span class="gt-num ${i<3?"hot":""}">${i+1}</span><span class="gt-kw">${esc(kw)}</span>${vol?`<span class="gt-vol">${esc(vol)}</span>`:""}</a>
+      ${hasDetail?`<button class="gt-detail-btn" onclick="toggleGtDetail(${i})">Chi tiết ▾</button>
+      <div class="gt-detail" id="gtd${i}">
+        ${d.history&&d.history.length>1?`<div class="gt-detail-spark">${renderSparkline(d.history)}</div>`:""}
+        ${d.related_rising&&d.related_rising.length?`<div class="gt-detail-row"><b>Đang tăng:</b> ${d.related_rising.map(r=>esc(r.query)).join(", ")}</div>`:""}
+        ${d.related_top&&d.related_top.length?`<div class="gt-detail-row"><b>Liên quan:</b> ${d.related_top.map(r=>esc(r.query)).join(", ")}</div>`:""}
+      </div>`:""}
+    </div>`;
+    return row;
+  }).join("")}</div>`;
+}
+window.toggleGtDetail=function(i){ const el=document.getElementById("gtd"+i); if(el) el.classList.toggle("open"); };
+
+function renderProducts(items){
+  const el=document.getElementById("productsBox");
+  if(!items||!items.length){el.innerHTML=emptyBox("🛍️","Chưa có gợi ý sản phẩm cho ngày này");return;}
+  el.innerHTML=items.map((s,i)=>{
+    const products=(s.products||[]).map(p=>{
+      const lvl=parseInt(p.demand_level)||0;
+      return `<div class="prod-card">
+        <div class="prod-hd"><span class="prod-name">${esc(p.name)}</span><span class="prod-demand" title="Mức độ liên quan/nhu cầu ước tính">${lvl}/10</span></div>
+        <div class="prod-cat">${esc(p.category||"")}</div>
+        <div class="prod-reason">${esc(p.reason||"")}</div>
+        ${p.target_audience?`<div class="prod-audience">🎯 ${esc(p.target_audience)}</div>`:""}
+      </div>`;
+    }).join("");
+    return `<div class="prod-theme fade-in" style="animation-delay:${i*0.05}s">
+      <div class="prod-theme-title">💡 ${esc(s.theme||"")}</div>
+      <div class="prod-grid">${products}</div>
+    </div>`;
+  }).join("");
 }
 
 function renderYoutube(items){
@@ -737,7 +846,13 @@ function renderYoutube(items){
 window.setF=function(f,btn){ filter=f; document.querySelectorAll(".fbtn").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); renderClusters(arts,clusters,f); };
 window.toggleCl=function(i){ const b=document.getElementById("cb"+i), a=document.getElementById("ca"+i); a.classList.toggle("open",b.classList.toggle("open")); setTimeout(()=>{ syncSidebarHeight(); checkViewMore(); }, 320); };
 window.doShare=function(){ const url=`${location.origin}${location.pathname}?date=${currentDate}`; document.getElementById("shareUrl").value=url; navigator.clipboard.writeText(url).then(()=>{ const b=document.getElementById("btnCopy"); b.textContent="✓ Đã copy"; b.classList.add("ok"); setTimeout(()=>{b.textContent="Copy";b.classList.remove("ok");},2000); }); };
-window.switchTab=function(tab,btn){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); btn.classList.add("active"); document.getElementById("trendsTab").style.display=tab==="trends"?"block":"none"; document.getElementById("financialTab").style.display=tab==="financial"?"block":"none"; setTimeout(()=>{ syncSidebarHeight(); checkViewMore(); }, 50); };
+window.switchTab=function(tab,btn){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); btn.classList.add("active");
+  document.getElementById("trendsTab").style.display=tab==="trends"?"block":"none";
+  document.getElementById("financialTab").style.display=tab==="financial"?"block":"none";
+  document.getElementById("productsTab").style.display=tab==="products"?"block":"none";
+  setTimeout(()=>{ syncSidebarHeight(); checkViewMore(); }, 50);
+};
 function setBusy(on){ document.getElementById("btnRefresh").classList.toggle("loading",on); const ic=document.getElementById("refreshIc"); ic.classList.toggle("spin",on); }
 function toast(msg,type="ok"){ const t=document.getElementById("toast"); t.textContent=msg; t.className=`toast ${type} show`; setTimeout(()=>t.classList.remove("show"),3000); }
 window.showToast=toast;
