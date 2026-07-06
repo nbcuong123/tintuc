@@ -71,7 +71,15 @@ RSS_SOURCES = [
 MAX_ARTICLES_PER_SOURCE = 10
 MAX_ARTICLES_FOR_AI     = 8
 
-STOCK_SYMBOLS = ["VIC", "VNM", "FPT", "HPG", "MSN", "SSI", "VCB", "CTG", "BID", "MWG"]
+STOCK_SYMBOLS = [
+    "VIC", "VNM", "FPT", "HPG", "MSN", "SSI", "VCB", "CTG", "BID", "MWG",
+    "VHM", "GAS", "PLX", "POW", "TCB", "ACB", "STB", "VJC", "PNJ", "VRE",
+]
+
+# Symbol đại diện cho chỉ số VN-Index trên Yahoo Finance (unofficial).
+# Yahoo không có mã chính thức ổn định cho VN-Index nên thử lần lượt các
+# candidate; cái nào trả dữ liệu hợp lệ trước sẽ được dùng.
+VNINDEX_CANDIDATES = ["^VNINDEX", "VNINDEX.VN", "^VNI"]
 
 
 # ─── FIREBASE ─────────────────────────────────────────────────
@@ -662,6 +670,59 @@ def fetch_google_trends():
         return []
 
 
+def fetch_trends_detail(google_trends, top_n=5):
+    """Đào sâu top N từ khóa trending: lấy từ khóa liên quan (top + rising)
+    và biểu đồ độ quan tâm 7 ngày qua thư viện pytrends (unofficial Google
+    Trends API). Dùng để hiển thị "Xu hướng chi tiết" và làm input cho
+    generate_product_suggestions()."""
+    print("  → Fetch chi tiết Google Trends (related queries)...")
+    try:
+        from pytrends.request import TrendReq
+    except ImportError:
+        print("     ⚠️  Chưa cài pytrends (xem requirements.txt). Bỏ qua.")
+        return []
+
+    keywords = [t.get("keyword", "").strip() for t in google_trends[:top_n] if t.get("keyword")]
+    if not keywords:
+        return []
+
+    details = []
+    try:
+        pytrends = TrendReq(hl="vi-VN", tz=420)  # tz=420 ~ GMT+7
+    except Exception as e:
+        print(f"     ⚠️  Không khởi tạo được pytrends: {e}")
+        return []
+
+    for kw in keywords:
+        try:
+            pytrends.build_payload([kw], timeframe="now 7-d", geo="VN")
+
+            iot = pytrends.interest_over_time()
+            history = []
+            if iot is not None and not iot.empty and kw in iot.columns:
+                history = [int(v) for v in iot[kw].tolist()][-7:]
+
+            related = pytrends.related_queries().get(kw, {})
+            top_df = related.get("top")
+            rising_df = related.get("rising")
+            top_list = top_df.head(5).to_dict("records") if top_df is not None else []
+            rising_list = rising_df.head(5).to_dict("records") if rising_df is not None else []
+
+            details.append({
+                "keyword": kw,
+                "history": history,
+                "related_top": [{"query": r.get("query", ""), "value": r.get("value", 0)} for r in top_list],
+                "related_rising": [{"query": r.get("query", ""), "value": r.get("value", 0)} for r in rising_list],
+            })
+            time.sleep(1)  # tránh bị Google rate-limit
+        except Exception as e:
+            print(f"     ⚠️  Trend detail '{kw}' lỗi: {e}")
+            continue
+
+    print(f"     ✅ Chi tiết {len(details)}/{len(keywords)} từ khóa")
+    return details
+
+
 # ─── YOUTUBE TRENDING ─────────────────────────────────────────
 def fetch_youtube_trending():
     print("  → Fetch YouTube Trending VN...")
@@ -879,66 +940,222 @@ def fetch_jpy_data(usd_vnd_rate):
 def fetch_stock_movers():
     gainers = []
     losers = []
-    
+    all_stocks = []   # dữ liệu chi tiết cho MỌI mã (dùng để phân tích xu hướng/sản phẩm bán kèm)
+
     for symbol in STOCK_SYMBOLS:
         try:
             resp = requests.get(
                 f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}.VN",
-                params={"range": "10d", "interval": "1d"},
+                # Lấy 1 tháng dữ liệu thay vì 10 ngày để tính được biên độ
+                # cao/thấp theo tháng và khối lượng trung bình, "chi tiết" hơn
+                # bản cũ nhưng vẫn nhẹ, không cần thêm API key.
+                params={"range": "1mo", "interval": "1d"},
                 timeout=10,
                 headers={"User-Agent": "Mozilla/5.0"}
             )
-            
+
             if resp.status_code != 200:
                 continue
-            
+
             data = resp.json()
             result = data.get("chart", {}).get("result", [])
             if not result:
                 continue
-            
-            quotes = result[0].get("indicators", {}).get("quote", [{}])[0]
-            closes = quotes.get("close", [])
-            closes = [c for c in closes if c is not None]
-            
-            if len(closes) < 4:
+
+            r0 = result[0]
+            meta = r0.get("meta", {})
+            quotes = r0.get("indicators", {}).get("quote", [{}])[0]
+            closes  = quotes.get("close", [])
+            volumes = quotes.get("volume", [])
+            highs   = quotes.get("high", [])
+            lows    = quotes.get("low", [])
+
+            closes_clean = [c for c in closes if c is not None]
+            if len(closes_clean) < 4:
                 continue
-            
-            last_3 = closes[-3:]
-            prev = closes[-4]
-            
-            if all(last_3[i] > last_3[i-1] for i in range(1, len(last_3))) and last_3[0] > prev:
-                change_pct = ((last_3[-1] - prev) / prev) * 100
-                history = [int(c) for c in closes[-7:]] if len(closes) >= 7 else [int(c) for c in closes]
-                gainers.append({
-                    "symbol": symbol,
-                    "price": int(last_3[-1] * 1000),
-                    "change": round(change_pct, 2),
-                    "history": history,
-                })
-            
-            elif all(last_3[i] < last_3[i-1] for i in range(1, len(last_3))) and last_3[0] < prev:
-                change_pct = ((last_3[-1] - prev) / prev) * 100
-                history = [int(c) for c in closes[-7:]] if len(closes) >= 7 else [int(c) for c in closes]
-                losers.append({
-                    "symbol": symbol,
-                    "price": int(last_3[-1] * 1000),
-                    "change": round(change_pct, 2),
-                    "history": history,
-                })
-            
+
+            volumes_clean = [v for v in volumes if v is not None]
+            highs_clean   = [h for h in highs if h is not None]
+            lows_clean    = [l for l in lows if l is not None]
+
+            last_3 = closes_clean[-3:]
+            prev = closes_clean[-4]
+            change_pct = ((closes_clean[-1] - prev) / prev) * 100
+            history_7 = [int(c) for c in closes_clean[-7:]] if len(closes_clean) >= 7 else [int(c) for c in closes_clean]
+
+            detail = {
+                "symbol":     symbol,
+                "price":      int(closes_clean[-1] * 1000),
+                "change":     round(change_pct, 2),
+                "history":    history_7,
+                # ─ Chi tiết bổ sung ─
+                "volume":       int(volumes_clean[-1]) if volumes_clean else None,
+                "avgVolume1m":  int(sum(volumes_clean) / len(volumes_clean)) if volumes_clean else None,
+                "high1m":       round(max(highs_clean) * 1000) if highs_clean else None,
+                "low1m":        round(min(lows_clean) * 1000) if lows_clean else None,
+                "currency":     meta.get("currency", "VND"),
+            }
+            all_stocks.append(detail)
+
+            is_up_streak = all(last_3[i] > last_3[i-1] for i in range(1, len(last_3))) and last_3[0] > prev
+            is_down_streak = all(last_3[i] < last_3[i-1] for i in range(1, len(last_3))) and last_3[0] < prev
+
+            if is_up_streak:
+                gainers.append(detail)
+            elif is_down_streak:
+                losers.append(detail)
+
             time.sleep(0.3)
-            
+
         except Exception as e:
             print(f"     ⚠️  Stock {symbol} lỗi: {e}")
             continue
-    
-    print(f"     📈 {len(gainers)} mã tăng 3 phiên, 📉 {len(losers)} mã giảm 3 phiên")
-    
+
+    print(f"     📈 {len(gainers)} mã tăng 3 phiên, 📉 {len(losers)} mã giảm 3 phiên, 📊 {len(all_stocks)} mã có dữ liệu chi tiết")
+
     return {
         "gainers": sorted(gainers, key=lambda x: x["change"], reverse=True)[:5],
         "losers": sorted(losers, key=lambda x: x["change"])[:5],
+        "all": sorted(all_stocks, key=lambda x: abs(x["change"]), reverse=True),
+        "index": fetch_market_index(),
     }
+
+
+def fetch_market_index():
+    """Lấy chỉ số VN-Index (best-effort qua Yahoo Finance, không chính thức).
+    Nếu tất cả candidate đều lỗi, trả None và frontend sẽ tự ẩn khối này."""
+    for symbol in VNINDEX_CANDIDATES:
+        try:
+            resp = requests.get(
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+                params={"range": "1mo", "interval": "1d"},
+                timeout=10,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            result = data.get("chart", {}).get("result", [])
+            if not result:
+                continue
+            quotes = result[0].get("indicators", {}).get("quote", [{}])[0]
+            closes = [c for c in quotes.get("close", []) if c is not None]
+            if len(closes) < 2:
+                continue
+            change_pct = ((closes[-1] - closes[0]) / closes[0]) * 100
+            history = [round(c, 2) for c in closes[-7:]] if len(closes) >= 7 else [round(c, 2) for c in closes]
+            return {
+                "symbol": symbol,
+                "price": round(closes[-1], 2),
+                "change": round(change_pct, 2),
+                "history": history,
+            }
+        except Exception as e:
+            print(f"     ⚠️  VN-Index ({symbol}) lỗi: {e}")
+            continue
+    print("     ⚠️  Không lấy được VN-Index từ bất kỳ nguồn nào")
+    return None
+
+
+# ─── GỢI Ý SẢN PHẨM BÁN KÈM (AI) ───────────────────────────────
+def build_product_prompt(google_trends, trends_detail, clusters, stock_data):
+    """Ghép xu hướng tìm kiếm + tin nóng + biến động chứng khoán thành 1 prompt
+    để AI phân tích nhu cầu thị trường và gợi ý sản phẩm/dịch vụ có thể bán kèm
+    (affiliate, dropship, quảng cáo theo ngữ cảnh...)."""
+
+    trend_lines = []
+    for t in google_trends[:10]:
+        trend_lines.append(f"- {t.get('keyword','')} (lượng tìm kiếm: {t.get('traffic','?')})")
+
+    related_lines = []
+    for d in trends_detail:
+        rising = ", ".join(r["query"] for r in d.get("related_rising", [])[:3] if r.get("query"))
+        if rising:
+            related_lines.append(f"- '{d['keyword']}' → từ khóa liên quan đang tăng: {rising}")
+
+    news_lines = []
+    hot_clusters = sorted(clusters, key=lambda c: c.get("importance", 0), reverse=True)[:8]
+    for c in hot_clusters:
+        news_lines.append(f"- {c.get('topic','')}: {c.get('summary','')[:120]}")
+
+    stock_lines = []
+    if stock_data:
+        for s in (stock_data.get("gainers") or [])[:5]:
+            stock_lines.append(f"- {s['symbol']} tăng {s['change']}% (3 phiên liên tiếp)")
+        for s in (stock_data.get("losers") or [])[:3]:
+            stock_lines.append(f"- {s['symbol']} giảm {s['change']}% (3 phiên liên tiếp)")
+
+    prompt = f"""Bạn là chuyên gia phân tích xu hướng thị trường & thương mại điện tử tại Việt Nam.
+Dựa trên dữ liệu THỰC TẾ dưới đây (xu hướng tìm kiếm Google, tin tức nổi bật, biến động chứng khoán),
+hãy phân tích và đề xuất các NHÓM SẢN PHẨM/DỊCH VỤ có tiềm năng bán kèm (affiliate, dropship,
+quảng cáo theo ngữ cảnh) ăn theo các xu hướng này.
+
+## Xu hướng tìm kiếm Google (Việt Nam, hôm nay)
+{chr(10).join(trend_lines) or "(không có dữ liệu)"}
+
+## Từ khóa liên quan đang tăng mạnh
+{chr(10).join(related_lines) or "(không có dữ liệu)"}
+
+## Tin tức nổi bật hôm nay
+{chr(10).join(news_lines) or "(không có dữ liệu)"}
+
+## Biến động chứng khoán
+{chr(10).join(stock_lines) or "(không có dữ liệu)"}
+
+Trả lời CHỈ bằng JSON theo đúng format sau, không thêm giải thích ngoài JSON:
+{{
+  "suggestions": [
+    {{
+      "theme": "Tên chủ đề/xu hướng bắt nguồn",
+      "products": [
+        {{
+          "name": "Tên nhóm sản phẩm/dịch vụ cụ thể",
+          "category": "Danh mục (VD: Thời trang, Điện tử, Du lịch, Tài chính...)",
+          "reason": "Vì sao sản phẩm này liên quan đến xu hướng (1 câu ngắn)",
+          "target_audience": "Đối tượng khách hàng phù hợp",
+          "demand_level": 1-10
+        }}
+      ]
+    }}
+  ]
+}}
+
+Yêu cầu:
+- Tối đa 6 "theme", mỗi theme tối đa 3 sản phẩm.
+- Chỉ đề xuất sản phẩm/dịch vụ CÓ THẬT, hợp pháp, phù hợp thị trường Việt Nam.
+- demand_level phản ánh mức độ liên quan/nhu cầu ước tính dựa trên dữ liệu ở trên, không bịa số liệu.
+"""
+    return prompt
+
+
+def generate_product_suggestions(google_trends, trends_detail, clusters, stock_data):
+    print("  → Phân tích gợi ý sản phẩm bán kèm (AI)...")
+    if not PROVIDERS:
+        print("     ⚠️  Không có AI provider nào khả dụng. Bỏ qua.")
+        return []
+
+    if not google_trends and not clusters:
+        print("     ⚠️  Không đủ dữ liệu xu hướng/tin tức để phân tích. Bỏ qua.")
+        return []
+
+    prompt = build_product_prompt(google_trends, trends_detail, clusters, stock_data)
+
+    for pname, caller in PROVIDERS:
+        try:
+            text, _ = caller(prompt)
+            result = parse_ai_response(text)
+            suggestions = result.get("suggestions", []) if isinstance(result, dict) else []
+            if suggestions:
+                print(f"     ✅ {pname}: {len(suggestions)} chủ đề, "
+                      f"{sum(len(s.get('products', [])) for s in suggestions)} sản phẩm gợi ý")
+                return suggestions
+            print(f"     ⚠️  {pname} trả về rỗng, thử provider kế tiếp...")
+        except Exception as e:
+            print(f"     ⚠️  {pname} lỗi: {str(e)[:150]}, thử provider kế tiếp...")
+            continue
+
+    print("     ❌ Tất cả provider đều lỗi. Bỏ qua gợi ý sản phẩm hôm nay.")
+    return []
 
 
 # ─── TELEGRAM NOTIFICATION ────────────────────────────────────
@@ -1013,7 +1230,8 @@ def build_hot_news_notification(articles, ai_result):
 
 
 # ─── SAVE TO FIREBASE ─────────────────────────────────────────
-def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trends=None, financial_data=None):
+def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trends=None,
+                      financial_data=None, trends_detail=None, product_suggestions=None):
     print("  → Lưu Firebase...")
 
     existing  = ref.child(f"articles/{TODAY}").get() or {}
@@ -1061,6 +1279,20 @@ def save_to_firebase(ref, articles, ai_result, google_trends=None, youtube_trend
         except Exception as e:
             print(f"     ⚠️  Không thể lưu dữ liệu tài chính (bỏ qua): {str(e)[:100]}")
 
+    if trends_detail:
+        try:
+            ref.child(f"trends_detail/{TODAY}").set(trends_detail)
+            print("     🔎 Đã lưu chi tiết xu hướng tìm kiếm")
+        except Exception as e:
+            print(f"     ⚠️  Không thể lưu chi tiết xu hướng (bỏ qua): {str(e)[:100]}")
+
+    if product_suggestions:
+        try:
+            ref.child(f"products/{TODAY}").set(product_suggestions)
+            print("     🛍️  Đã lưu gợi ý sản phẩm bán kèm")
+        except Exception as e:
+            print(f"     ⚠️  Không thể lưu gợi ý sản phẩm (bỏ qua): {str(e)[:100]}")
+
     ref.child("meta/lastUpdated").set(datetime.now(VN_TZ).isoformat())
     ref.child("meta/lastDate").set(TODAY)
     print("  ✅ Firebase xong")
@@ -1105,8 +1337,17 @@ def main():
     print("\n5.5️⃣ Fetch Financial Data...")
     financial_data = fetch_financial_data()
 
+    print("\n5.6️⃣ Fetch chi tiết Google Trends...")
+    trends_detail = fetch_trends_detail(google_trends)
+
+    print("\n5.7️⃣ Phân tích gợi ý sản phẩm bán kèm...")
+    product_suggestions = generate_product_suggestions(
+        google_trends, trends_detail, ai_result.get("clusters", []), financial_data.get("stocks") if financial_data else None
+    )
+
     print("\n6️⃣  Lưu Firebase...")
-    save_to_firebase(ref, articles, ai_result, google_trends, youtube_trends, financial_data)
+    save_to_firebase(ref, articles, ai_result, google_trends, youtube_trends,
+                      financial_data, trends_detail, product_suggestions)
 
     print("\n7️⃣  Gửi thông báo tin nóng...")
     notification = build_hot_news_notification(articles, ai_result)
