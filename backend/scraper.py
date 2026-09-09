@@ -300,7 +300,7 @@ def call_groq(prompt):
             "Content-Type":  "application/json",
         },
         json={
-            "model":       "llama-3.3-70b-versatile",
+            "model":       "openai/gpt-oss-120b",
             "messages":    [{"role": "user", "content": prompt}],
             "temperature": 0.2,
             "max_tokens":  8000,
@@ -339,7 +339,7 @@ def call_mistral(prompt):
 
 
 def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={GEMINI_API_KEY}"
     resp = requests.post(
         url,
         headers={"Content-Type": "application/json"},
