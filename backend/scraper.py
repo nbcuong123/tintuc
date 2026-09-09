@@ -35,6 +35,9 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 GROQ_API_KEY     = os.environ.get("GROQ_API_KEY")
 MISTRAL_API_KEY  = os.environ.get("MISTRAL_API_KEY")
 GEMINI_API_KEY   = os.environ.get("GEMINI_API_KEY")
+SAMBANOVA_API_KEY = os.environ.get("SAMBANOVA_API_KEY")
+GH_MODELS_TOKEN   = os.environ.get("GH_MODELS_TOKEN")   # GitHub Personal Access Token (không cần quyền gì đặc biệt)
+CEREBRAS_API_KEY  = os.environ.get("CEREBRAS_API_KEY")
 
 FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
 
@@ -366,6 +369,85 @@ def call_gemini(prompt):
     return text, finish
 
 
+def call_sambanova(prompt):
+    """SambaNova Cloud — API OpenAI-compatible. Đăng ký free tại
+    cloud.sambanova.ai (không cần thẻ), lấy key rồi set SAMBANOVA_API_KEY.
+    Dùng Meta-Llama-3.3-70B-Instruct — model 'battle-tested' nhất của họ,
+    hỗ trợ đa ngôn ngữ tốt (phù hợp dịch/tóm tắt tiếng Việt)."""
+    resp = requests.post(
+        "https://api.sambanova.ai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {SAMBANOVA_API_KEY}",
+            "Content-Type":  "application/json",
+        },
+        json={
+            "model":       "Meta-Llama-3.3-70B-Instruct",
+            "messages":    [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens":  8000,
+        },
+        timeout=(10, 180),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise ValueError("SambaNova trả về không có choices")
+    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
+
+
+def call_github_models(prompt):
+    """GitHub Models — free cho mọi tài khoản GitHub. Tạo Personal Access
+    Token tại github.com/settings/tokens (không cần cấp quyền gì), set biến
+    môi trường GH_MODELS_TOKEN."""
+    resp = requests.post(
+        "https://models.github.ai/inference/chat/completions",
+        headers={
+            "Authorization": f"Bearer {GH_MODELS_TOKEN}",
+            "Content-Type":  "application/json",
+        },
+        json={
+            "model":       "openai/gpt-4o-mini",
+            "messages":    [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens":  8000,
+        },
+        timeout=(10, 180),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise ValueError("GitHub Models trả về không có choices")
+    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
+
+
+def call_cerebras(prompt):
+    """Cerebras Inference — free trial/tier tại cloud.cerebras.ai, API
+    OpenAI-compatible. Set biến môi trường CEREBRAS_API_KEY.
+    Model 'llama-3.3-70b' (đặt tên riêng của Cerebras, không phải Groq)."""
+    resp = requests.post(
+        "https://api.cerebras.ai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {CEREBRAS_API_KEY}",
+            "Content-Type":  "application/json",
+        },
+        json={
+            "model":       "llama-3.3-70b",
+            "messages":    [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_tokens":  8000,
+        },
+        timeout=(10, 180),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise ValueError("Cerebras trả về không có choices")
+    return choices[0]["message"]["content"], choices[0].get("finish_reason", "")
+
+
 # 🔑 Danh sách providers theo thứ tự ưu tiên (xoay vòng)
 PROVIDERS = []
 if DEEPSEEK_API_KEY:
@@ -376,6 +458,12 @@ if MISTRAL_API_KEY:
     PROVIDERS.append(("mistral", call_mistral))
 if GEMINI_API_KEY:
     PROVIDERS.append(("gemini", call_gemini))
+if SAMBANOVA_API_KEY:
+    PROVIDERS.append(("sambanova", call_sambanova))
+if GH_MODELS_TOKEN:
+    PROVIDERS.append(("github_models", call_github_models))
+if CEREBRAS_API_KEY:
+    PROVIDERS.append(("cerebras", call_cerebras))
 
 
 def process_batch_with_ai(batch_articles, batch_label=""):
@@ -1303,7 +1391,8 @@ def main():
     print(f"\n{'='*50}\n📰 News Digest - {TODAY}\n{'='*50}\n")
 
     print("🔑 API keys status:")
-    for key in ["DEEPSEEK_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY", "GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN"]:
+    for key in ["DEEPSEEK_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY", "GEMINI_API_KEY",
+                "SAMBANOVA_API_KEY", "GH_MODELS_TOKEN", "CEREBRAS_API_KEY", "TELEGRAM_BOT_TOKEN"]:
         val = os.environ.get(key)
         status = f"✅ có ({len(val)} ký tự)" if val else "❌ KHÔNG CÓ"
         print(f"   • {key}: {status}")
