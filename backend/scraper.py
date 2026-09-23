@@ -478,7 +478,7 @@ def process_batch_with_ai(batch_articles, batch_label=""):
     # Thử từng provider, KHÔNG retry (để tránh vượt rate limit)
     for provider_name, caller in PROVIDERS:
         print(f"  → Thử provider: {provider_name}")
-        
+
         try:
             with hard_timeout(200):
                 text, finish_reason = caller(prompt)
@@ -655,12 +655,12 @@ def extract_signature_tokens(text):
 def translation_looks_mismatched(orig_title, orig_summary, t_vi, s_vi):
     orig_sig = extract_signature_tokens(orig_title + " " + orig_summary)
     vi_sig   = extract_signature_tokens(t_vi + " " + s_vi)
-    
+
     if len(orig_sig) < 3:
         return False
     if len(vi_sig) < 3:
         return False
-    
+
     overlap = orig_sig & vi_sig
     return len(overlap) == 0
 
@@ -858,10 +858,10 @@ def fetch_youtube_trending():
 # ─── FINANCIAL DATA ───────────────────────────────────────────
 def fetch_financial_data():
     print("  → Fetch Financial Data...")
-    
+
     usd_vnd_rate = fetch_usd_vnd_rate()
     print(f"     💱 USD/VND = {usd_vnd_rate:,.0f}")
-    
+
     data = {
         "gold": fetch_gold_price(usd_vnd_rate),
         "bitcoin": fetch_bitcoin_price(usd_vnd_rate),
@@ -870,7 +870,7 @@ def fetch_financial_data():
         "stocks": fetch_stock_movers(),
         "updatedAt": datetime.now(VN_TZ).isoformat(),
     }
-    
+
     count = sum(1 for k, v in data.items() if v and k != "updatedAt")
     print(f"     ✅ Dữ liệu tài chính: {count} mục")
     return data
@@ -898,28 +898,28 @@ def fetch_gold_price(usd_vnd_rate):
             params={"api_key": "demo", "currency": "USD", "unit": "toz"},
             timeout=10,
         )
-        
+
         price_usd = None
         if resp.status_code == 200:
             data = resp.json()
             price_usd = data.get("metals", {}).get("gold")
-        
+
         if not price_usd:
             price_usd = 2650
             print(f"     ⚠️  Dùng giá vàng mặc định: {price_usd} USD/oz")
-        
+
         price_vnd_per_oz = price_usd * usd_vnd_rate
         price_vnd_per_luong = int(price_vnd_per_oz * 1.20556)
         price_vnd_per_chi = price_vnd_per_luong // 10
-        
+
         base = price_vnd_per_chi
         history = [
             base - 180000, base - 150000, base - 120000, base - 80000,
             base - 50000, base - 20000, base,
         ]
-        
+
         change = ((base - history[0]) / history[0]) * 100
-        
+
         return {
             "price": base,
             "unit": "nghìn/chỉ",
@@ -949,11 +949,11 @@ def fetch_bitcoin_price(usd_vnd_rate):
             price_usd = btc.get("usd", 0)
             change_24h = btc.get("usd_24h_change", 0)
             price_vnd = int(price_usd * usd_vnd_rate)
-            
+
             history = fetch_bitcoin_history(usd_vnd_rate)
             if not history:
                 history = [int(price_vnd * (1 - i * 0.015)) for i in range(6, -1, -1)]
-            
+
             return {
                 "price": price_vnd,
                 "unit": "VND",
@@ -991,7 +991,7 @@ def build_currency_data(usd_vnd_rate, currency):
         usd_vnd_rate,
     ]
     change = ((usd_vnd_rate - history[0]) / history[0]) * 100
-    
+
     return {
         "price": int(usd_vnd_rate),
         "unit": "VND/USD",
@@ -1010,10 +1010,10 @@ def fetch_jpy_data(usd_vnd_rate):
             data = resp.json()
             jpy_usd = data.get("rates", {}).get("USD", 0.0067)
             jpy_vnd = jpy_usd * usd_vnd_rate
-            
+
             history = [round(jpy_vnd - i * 0.3, 2) for i in range(6, -1, -1)]
             change = ((jpy_vnd - history[0]) / history[0]) * 100
-            
+
             return {
                 "price": round(jpy_vnd, 2),
                 "unit": "VND/JPY",
@@ -1276,18 +1276,18 @@ def send_telegram(message):
 def build_hot_news_notification(articles, ai_result):
     clusters = ai_result.get("clusters", [])
     trends   = ai_result.get("trends", [])
-    
+
     hot_clusters = [c for c in clusters if c.get("importance", 0) >= 8]
     hot_clusters.sort(key=lambda c: c.get("importance", 0), reverse=True)
     hot_clusters = hot_clusters[:5]
-    
+
     hot_trends = [t for t in trends if t.get("score", 0) >= 85]
-    
+
     if not hot_clusters and not hot_trends:
         return None
-    
+
     msg = f"🔥 <b>TIN NÓNG {TODAY}</b>\n\n"
-    
+
     if hot_clusters:
         msg += "📰 <b>Tin nổi bật:</b>\n"
         for c in hot_clusters:
@@ -1302,18 +1302,18 @@ def build_hot_news_notification(articles, ai_result):
                     title = art.get("title_vi") or art.get("title", "")
                     url = art.get("url", "")
                     article_titles.append(f'• <a href="{url}">{title[:60]}</a>')
-            
+
             msg += f"\n<b>{topic}</b> (⭐{imp}/10)\n{summary}\n"
             if article_titles:
                 msg += "\n".join(article_titles) + "\n"
-    
+
     if hot_trends:
         msg += "\n📈 <b>Xu hướng nóng:</b>\n"
         for t in hot_trends[:3]:
             msg += f"• {t.get('topic', '?')} (score: {t.get('score', 0)})\n"
-    
+
     msg += f"\n🔗 <a href='https://nbcuong123.github.io/tintuc/'>Xem đầy đủ</a>"
-    
+
     return msg
 
 
@@ -1439,7 +1439,7 @@ def main():
         import oto_danang
         oto_danang.run(ref, providers=PROVIDERS, parse_fn=parse_ai_response, force=True)
     except Exception as e:
-    print(f"  ⚠️  Bỏ qua xu hướng ô tô: {str(e)[:150]}")
+        print(f"  ⚠️  Bỏ qua xu hướng ô tô: {str(e)[:150]}")
 
     print("\n6️⃣  Lưu Firebase...")
     save_to_firebase(ref, articles, ai_result, google_trends, youtube_trends,
