@@ -1426,6 +1426,12 @@ def main():
     print("\n5.5️⃣ Fetch Financial Data...")
     financial_data = fetch_financial_data()
 
+        print("\n5.8️⃣ Xu hướng ô tô Đà Nẵng...")
+    try:
+        import oto_danang
+        oto_danang.run(ref, providers=PROVIDERS, parse_fn=parse_ai_response, force=True)
+    except Exception as e:
+        print(f"  ⚠️  Bỏ qua xu hướng ô tô: {str(e)[:150]}")
     print("\n5.6️⃣ Fetch chi tiết Google Trends...")
     trends_detail = fetch_trends_detail(google_trends)
 
