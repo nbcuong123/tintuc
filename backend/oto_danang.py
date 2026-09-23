@@ -41,8 +41,13 @@ def load_keywords():
 
 # ─── GOOGLE TRENDS ────────────────────────────────────────────
 def new_client():
+    """
+    KHÔNG truyền retries/backoff_factor: pytrends sẽ dựng urllib3 Retry với
+    tham số method_whitelist đã bị bỏ ở urllib3 mới → TypeError.
+    Giữ đúng kiểu khởi tạo như fetch_trends_detail() trong scraper.
+    """
     from pytrends.request import TrendReq
-    return TrendReq(hl="vi-VN", tz=420, timeout=(10, 30), retries=2, backoff_factor=0.5)
+    return TrendReq(hl="vi-VN", tz=420, timeout=(10, 30))
 
 
 def fetch_batch(pytrends, words):
@@ -59,7 +64,8 @@ def fetch_batch(pytrends, words):
             return series, dates, pytrends
         except Exception as e:
             wait = attempt * 30
-            log(f"⚠️  lỗi {e.__class__.__name__}, thử lại sau {wait}s [{attempt}/{MAX_RETRY}]")
+            log(f"⚠️  {e.__class__.__name__}: {str(e)[:200]}")
+            log(f"   thử lại sau {wait}s [{attempt}/{MAX_RETRY}]")
             time.sleep(wait)
             pytrends = new_client()
     log(f"❌ bỏ qua nhóm: {words}")
