@@ -1,0 +1,87 @@
+{
+  "_huong_dan": "Thêm/bớt từ khóa thoải mái. Mỗi từ khóa là một dòng trong nhóm. Càng nhiều từ khóa thì script chạy càng lâu (mỗi 4 từ mất khoảng 15 giây).",
+  "anchor": "ô tô",
+  "nhom": {
+    "Mâm xe": [
+      "phục hồi mâm xe",
+      "sửa mâm xe",
+      "sơn mâm xe",
+      "độ mâm xe",
+      "mâm xe ô tô",
+      "nắn mâm xe",
+      "mâm đúc",
+      "giá mâm xe ô tô"
+    ],
+    "Lốp xe": [
+      "lốp ô tô",
+      "thay lốp ô tô",
+      "giá lốp ô tô",
+      "cân bằng động",
+      "vá lốp ô tô",
+      "lốp Michelin"
+    ],
+    "Đồng sơn": [
+      "sơn xe ô tô",
+      "đồng sơn ô tô",
+      "sơn dặm ô tô",
+      "gara đồng sơn",
+      "phủ ceramic ô tô",
+      "dán PPF ô tô"
+    ],
+    "Bảo dưỡng - sửa chữa": [
+      "bảo dưỡng ô tô",
+      "sửa chữa ô tô",
+      "thay dầu ô tô",
+      "gara ô tô",
+      "sửa điều hòa ô tô",
+      "thay ắc quy ô tô",
+      "sửa hộp số tự động",
+      "đèn báo lỗi ô tô"
+    ],
+    "Rửa xe - chăm sóc": [
+      "rửa xe ô tô",
+      "chăm sóc xe ô tô",
+      "vệ sinh nội thất ô tô",
+      "đánh bóng ô tô",
+      "phủ nano ô tô"
+    ],
+    "Độ xe - phụ kiện": [
+      "độ xe ô tô",
+      "màn hình android ô tô",
+      "camera hành trình",
+      "cảm biến áp suất lốp",
+      "bọc ghế da ô tô",
+      "thảm lót sàn ô tô",
+      "dán phim cách nhiệt ô tô"
+    ],
+    "Mua bán xe": [
+      "mua xe ô tô",
+      "ô tô cũ",
+      "bán xe ô tô",
+      "giá xe ô tô",
+      "trả góp ô tô",
+      "VinFast",
+      "Toyota Vios",
+      "Hyundai Accent",
+      "Ford Ranger",
+      "xe điện ô tô"
+    ],
+    "Dịch vụ khác": [
+      "cứu hộ ô tô",
+      "thuê xe ô tô",
+      "bảo hiểm ô tô",
+      "đăng kiểm ô tô",
+      "học lái xe ô tô",
+      "phí trước bạ ô tô",
+      "rửa xe tự động"
+    ]
+  },
+  "goi_y_tu_google": [
+    "mâm xe ô tô đà nẵng",
+    "sửa mâm xe đà nẵng",
+    "gara ô tô đà nẵng",
+    "sơn xe ô tô đà nẵng",
+    "lốp ô tô đà nẵng",
+    "độ xe ô tô đà nẵng"
+  ]
+}
