@@ -9,6 +9,7 @@ là theo tuần, chạy mỗi ngày vừa không đổi vừa dễ bị Google c
 import json
 import os
 import random
+import sys
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -274,26 +275,34 @@ def run(ref, providers=None, parse_fn=None, force=False):
     log(f"💾 đã lưu {NODE}/snapshot")
 
 
-# ─── GHÉP VÀO SCRAPER ─────────────────────────────────────────
-# Thêm vào main() của scraper, ngay sau bước 5.7, TRƯỚC bước 6:
-#
-#     print("\n5.8️⃣ Xu hướng ô tô Đà Nẵng...")
-#     try:
-#         import oto_danang
-#         oto_danang.run(ref, providers=PROVIDERS, parse_fn=parse_ai_response)
-#     except Exception as e:
-#         print(f"  ⚠️  Bỏ qua xu hướng ô tô: {str(e)[:150]}")
-#
-# Chạy thử ngay không cần đợi thứ Hai: thêm force=True vào lời gọi run().
-
+# ─── CHẠY ĐỘC LẬP ─────────────────────────────────────────────
+# Workflow riêng (.github/workflows/oto-trends.yml) gọi thẳng file này:
+#     python backend/oto_danang.py
+# Không đụng gì tới scraper tin tức.
 
 if __name__ == "__main__":
-    # chạy độc lập để test
     import firebase_admin
     from firebase_admin import credentials, db
 
     FIREBASE_DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app"
+
     if not firebase_admin._apps:
-        cred = credentials.Certificate(json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"]))
-        firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
-    run(db.reference(), force=True)
+        sa = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+        if not sa:
+            raise SystemExit("❌ Thiếu FIREBASE_SERVICE_ACCOUNT")
+        credential = credentials.Certificate(json.loads(sa))
+        firebase_admin.initialize_app(credential, {"databaseURL": FIREBASE_DB_URL})
+
+    # Mượn lại danh sách AI provider của scraper để viết phần nhận định.
+    # Nếu không mượn được thì vẫn chạy bình thường, chỉ thiếu phần nhận định.
+    providers, parse_fn = None, None
+    try:
+        sys.path.insert(0, HERE)
+        import scraper
+        providers, parse_fn = scraper.PROVIDERS, scraper.parse_ai_response
+        log(f"dùng {len(providers)} AI provider của scraper")
+    except Exception as e:
+        log(f"không mượn được AI provider ({str(e)[:80]}), bỏ qua phần nhận định")
+
+    print("🚗 Xu hướng ô tô Đà Nẵng")
+    run(db.reference(), providers=providers, parse_fn=parse_fn, force=True)
