@@ -1426,12 +1426,6 @@ def main():
     print("\n5.5️⃣ Fetch Financial Data...")
     financial_data = fetch_financial_data()
 
-        print("\n5.8️⃣ Xu hướng ô tô Đà Nẵng...")
-    try:
-        import oto_danang
-        oto_danang.run(ref, providers=PROVIDERS, parse_fn=parse_ai_response, force=True)
-    except Exception as e:
-        print(f"  ⚠️  Bỏ qua xu hướng ô tô: {str(e)[:150]}")
     print("\n5.6️⃣ Fetch chi tiết Google Trends...")
     trends_detail = fetch_trends_detail(google_trends)
 
@@ -1439,6 +1433,13 @@ def main():
     product_suggestions = generate_product_suggestions(
         google_trends, trends_detail, ai_result.get("clusters", []), financial_data.get("stocks") if financial_data else None
     )
+
+    print("\n5.8️⃣ Xu hướng ô tô Đà Nẵng...")
+    try:
+        import oto_danang
+        oto_danang.run(ref, providers=PROVIDERS, parse_fn=parse_ai_response, force=True)
+    except Exception as e:
+    print(f"  ⚠️  Bỏ qua xu hướng ô tô: {str(e)[:150]}")
 
     print("\n6️⃣  Lưu Firebase...")
     save_to_firebase(ref, articles, ai_result, google_trends, youtube_trends,
