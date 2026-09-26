@@ -1,0 +1,90 @@
+{
+  "_huong_dan": "Thêm/bớt từ khóa thoải mái. Nếu log báo từ neo bằng 0 thì đổi 'anchor' sang từ khác có lượng tìm vừa phải.",
+  "node": "suckhoe_danang",
+  "chu_de": "Sức khỏe & con cái",
+  "khu_vuc": "Đà Nẵng",
+  "geo": "VN-DN",
+  "anchor": "nha khoa",
+  "boi_canh_ai": "Bạn phân tích nhu cầu của người dân Đà Nẵng về sức khỏe và nuôi dạy con cái, nhằm gợi ý cơ hội dịch vụ, sản phẩm và nội dung phù hợp cho doanh nghiệp nhỏ và người làm web, app tại địa phương.",
+  "nhom": {
+    "Bệnh thường gặp": [
+      "sốt xuất huyết",
+      "cúm A",
+      "viêm họng",
+      "sốt siêu vi",
+      "đau dạ dày",
+      "viêm xoang",
+      "đau lưng"
+    ],
+    "Bệnh mãn tính": [
+      "tiểu đường",
+      "huyết áp cao",
+      "gout",
+      "mỡ máu"
+    ],
+    "Khám chữa bệnh": [
+      "bệnh viện Đà Nẵng",
+      "phòng khám",
+      "khám tổng quát",
+      "xét nghiệm máu",
+      "bảo hiểm y tế"
+    ],
+    "Răng & mắt": [
+      "niềng răng",
+      "trồng răng implant",
+      "cận thị",
+      "mổ cận"
+    ],
+    "Vận động & dinh dưỡng": [
+      "gym",
+      "yoga",
+      "chạy bộ",
+      "thực phẩm chức năng",
+      "vitamin"
+    ],
+    "Giấc ngủ & tinh thần": [
+      "mất ngủ",
+      "stress"
+    ],
+    "Mang thai & sinh con": [
+      "mang thai",
+      "khám thai",
+      "bà bầu",
+      "sinh mổ",
+      "bệnh viện phụ sản"
+    ],
+    "Trẻ sơ sinh": [
+      "sữa công thức",
+      "bỉm",
+      "tiêm chủng",
+      "vắc xin cho trẻ",
+      "trẻ sơ sinh"
+    ],
+    "Bệnh trẻ em": [
+      "tay chân miệng",
+      "sốt ở trẻ",
+      "ho ở trẻ",
+      "trẻ biếng ăn",
+      "viêm phổi ở trẻ"
+    ],
+    "Học hành": [
+      "trường mầm non",
+      "tuyển sinh lớp 1",
+      "học tiếng Anh cho trẻ",
+      "học bơi cho trẻ",
+      "kỹ năng sống cho trẻ"
+    ],
+    "Vui chơi": [
+      "khu vui chơi trẻ em",
+      "đồ chơi trẻ em"
+    ]
+  },
+  "goi_y_tu_google": [
+    "khám bệnh đà nẵng",
+    "bệnh viện nhi đà nẵng",
+    "phòng khám nhi đà nẵng",
+    "tiêm chủng đà nẵng",
+    "trường mầm non đà nẵng",
+    "nha khoa đà nẵng"
+  ]
+}
