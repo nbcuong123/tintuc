@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Xu hướng Đà Nẵng — Người Đà Nẵng đang tìm gì</title>
-<meta name="description" content="Theo dõi hàng tuần người Đà Nẵng tìm kiếm gì trên Google: ô tô, sức khỏe, con cái và nhiều chủ đề khác.">
+<meta name="description" content="Theo dõi hàng tuần xu hướng tìm kiếm Google về Đà Nẵng: ô tô, sức khỏe, con cái, du lịch, AI và công nghệ.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;800&display=swap" rel="stylesheet">
@@ -78,7 +78,7 @@
 
   <header>
     <h1>Người Đà Nẵng đang tìm gì</h1>
-    <p class="gt">Mỗi tuần tổng hợp xu hướng tìm kiếm Google tại Đà Nẵng theo từng chủ đề, kèm nhận định ngắn về điều đang thay đổi.</p>
+    <p class="gt">Mỗi tuần tổng hợp xu hướng tìm kiếm Google liên quan tới Đà Nẵng theo từng chủ đề, kèm nhận định ngắn về điều đang thay đổi.</p>
   </header>
 
   <div class="luoi" id="luoi"></div>
@@ -87,8 +87,7 @@
   <div class="luoi" id="luoiPhu"></div>
 
   <footer>
-    Số liệu là mức độ quan tâm tìm kiếm tương đối trên Google, không phải số lượt tìm thật,
-    và không phải lời khuyên chuyên môn. Cập nhật tự động mỗi thứ Hai.
+    Dữ liệu từ Google Trends. Điểm từ 0 tới 100 thể hiện mức độ quan tâm: 100 là lúc được tìm nhiều nhất, điểm càng cao càng được quan tâm. Cập nhật tự động mỗi thứ Hai.
   </footer>
 
 </div>
@@ -104,6 +103,10 @@ const CHU_DE = [
     mo:"Sửa chữa, mâm lốp, đồng sơn, mua bán xe và dịch vụ quanh chiếc xe." },
   { ten:"Sức khỏe & con cái", bieu:"🩺", trang:"suckhoe.html", node:"suckhoe_danang",
     mo:"Bệnh thường gặp, khám chữa bệnh, mang thai, trẻ nhỏ và học hành." },
+  { ten:"Du lịch & ăn chơi",  bieu:"🏖️", trang:"dulich.html",   node:"dulich_danang",
+    mo:"Cả nước tìm gì về Đà Nẵng: điểm đến, khách sạn, ăn uống, vui chơi." },
+  { ten:"AI & công nghệ",     bieu:"🤖", trang:"congnghe.html", node:"congnghe_danang",
+    mo:"Công cụ AI, điện thoại, máy tính, mạng, ứng dụng và nhà thông minh." },
 ];
 
 const TRANG_PHU = [
