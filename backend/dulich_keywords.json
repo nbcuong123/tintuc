@@ -1,0 +1,62 @@
+{
+  "_huong_dan": "Trang này đo tìm kiếm CẢ NƯỚC về Đà Nẵng (geo = VN), vì người tìm du lịch Đà Nẵng chủ yếu ở tỉnh khác.",
+  "node": "dulich_danang",
+  "chu_de": "Du lịch & ăn chơi",
+  "khu_vuc": "cả nước (từ khóa về Đà Nẵng)",
+  "geo": "VN",
+  "anchor": "du lịch Đà Nẵng",
+  "boi_canh_ai": "Bạn phân tích nhu cầu tìm kiếm của du khách cả nước về Đà Nẵng, để gợi ý cơ hội cho khách sạn, quán ăn, dịch vụ tour, cho thuê xe và người làm nội dung du lịch tại Đà Nẵng.",
+  "luu_y_ai": [
+    "Mùa du lịch ảnh hưởng mạnh tới số liệu; khi nhận xét tăng giảm hãy cân nhắc yếu tố mùa vụ."
+  ],
+  "nhom": {
+    "Điểm đến": [
+      "Bà Nà Hills",
+      "bán đảo Sơn Trà",
+      "Ngũ Hành Sơn",
+      "cầu Rồng",
+      "biển Mỹ Khê",
+      "Hội An",
+      "Cù Lao Chàm"
+    ],
+    "Lưu trú": [
+      "khách sạn Đà Nẵng",
+      "resort Đà Nẵng",
+      "homestay Đà Nẵng",
+      "villa Đà Nẵng"
+    ],
+    "Di chuyển": [
+      "vé máy bay Đà Nẵng",
+      "thuê xe máy Đà Nẵng",
+      "đèo Hải Vân",
+      "sân bay Đà Nẵng"
+    ],
+    "Ăn uống": [
+      "hải sản Đà Nẵng",
+      "mì Quảng",
+      "bánh tráng cuốn thịt heo",
+      "quán ăn Đà Nẵng",
+      "cafe Đà Nẵng"
+    ],
+    "Vui chơi & sự kiện": [
+      "pháo hoa Đà Nẵng",
+      "Asia Park",
+      "chợ đêm Sơn Trà",
+      "bar Đà Nẵng"
+    ],
+    "Lên kế hoạch": [
+      "tour Đà Nẵng",
+      "lịch trình Đà Nẵng",
+      "thời tiết Đà Nẵng",
+      "Đà Nẵng có gì chơi"
+    ]
+  },
+  "goi_y_tu_google": [
+    "du lịch đà nẵng",
+    "khách sạn đà nẵng",
+    "ăn gì ở đà nẵng",
+    "đà nẵng có gì chơi",
+    "tour đà nẵng",
+    "hội an"
+  ]
+}

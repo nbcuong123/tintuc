@@ -1,0 +1,66 @@
+{
+  "_huong_dan": "Nếu log báo từ neo bằng 0 thì đổi 'anchor' sang từ khác.",
+  "node": "congnghe_danang",
+  "chu_de": "AI & công nghệ",
+  "khu_vuc": "Đà Nẵng",
+  "geo": "VN-DN",
+  "anchor": "laptop",
+  "boi_canh_ai": "Bạn phân tích nhu cầu công nghệ của người dân Đà Nẵng, để gợi ý cơ hội cho cửa hàng điện thoại, máy tính, dịch vụ sửa chữa, lắp đặt, đào tạo và người làm web, app tại địa phương.",
+  "luu_y_ai": [],
+  "nhom": {
+    "Công cụ AI": [
+      "ChatGPT",
+      "Gemini",
+      "DeepSeek",
+      "Grok",
+      "Claude",
+      "tạo ảnh AI",
+      "làm video AI"
+    ],
+    "Điện thoại": [
+      "iPhone",
+      "Samsung Galaxy",
+      "Xiaomi",
+      "sửa điện thoại",
+      "thay pin iPhone"
+    ],
+    "Máy tính": [
+      "MacBook",
+      "laptop cũ",
+      "sửa laptop",
+      "máy tính để bàn"
+    ],
+    "Mạng & viễn thông": [
+      "wifi",
+      "cáp quang",
+      "5G",
+      "sim số đẹp"
+    ],
+    "Ứng dụng": [
+      "Zalo",
+      "TikTok",
+      "Shopee",
+      "VNeID",
+      "Canva"
+    ],
+    "Học & làm việc": [
+      "học lập trình",
+      "Excel",
+      "thiết kế website",
+      "học AI"
+    ],
+    "Nhà thông minh": [
+      "camera an ninh",
+      "robot hút bụi",
+      "khóa vân tay"
+    ]
+  },
+  "goi_y_tu_google": [
+    "chatgpt",
+    "sửa điện thoại đà nẵng",
+    "mua laptop đà nẵng",
+    "học lập trình đà nẵng",
+    "lắp camera đà nẵng",
+    "cách dùng ai"
+  ]
+}
