@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sức khỏe & con cái — Đà Nẵng tìm gì</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --concrete:#D7DCD8;
+    --panel:#F3F5F2;
+    --ink:#16241F;
+    --muted:#63716B;
+    --line:#B4BDB6;
+    --tang:#D94F0C;
+    --giam:#2C6484;
+    --deu:#8C968F;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--concrete);
+    color:var(--ink);
+    font-family:'Be Vietnam Pro',system-ui,sans-serif;
+    font-size:15px;
+    line-height:1.5;
+  }
+  .wrap{max-width:1020px;margin:0 auto;padding:28px 18px 72px}
+
+  /* ---- đầu trang ---- */
+  header{margin-bottom:28px}
+  h1{
+    font-size:clamp(28px,5.5vw,44px);
+    font-weight:800;
+    letter-spacing:-0.025em;
+    line-height:1.08;
+    margin:0 0 10px;
+    max-width:14ch;
+  }
+  .meta{color:var(--muted);font-size:13.5px;font-weight:500}
+  .meta b{color:var(--ink);font-weight:600}
+
+  /* ---- dải đang tăng ---- */
+  .dai{margin:0 0 30px}
+  .dai h2{
+    font-size:14px;font-weight:600;color:var(--muted);
+    margin:0 0 10px;letter-spacing:0;
+  }
+  .movers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .mover{
+    background:var(--panel);
+    border-left:4px solid var(--tang);
+    padding:14px 16px 10px;
+    display:flex;flex-direction:column;gap:6px;min-height:118px;
+  }
+  .mover .kw{font-weight:600;font-size:16px;line-height:1.25}
+  .mover .pct{
+    font-size:26px;font-weight:800;color:var(--tang);
+    font-variant-numeric:tabular-nums;letter-spacing:-0.02em;
+  }
+  .mover svg{margin-top:auto;display:block}
+
+  /* ---- nhận định AI ---- */
+  .nd{background:var(--ink);color:#EAEEE8;padding:20px 22px;margin:0 0 30px}
+  .nd h2{font-size:14px;font-weight:600;margin:0 0 10px;color:#9FB0A7}
+  .nd .loi{font-size:16.5px;line-height:1.55;margin:0 0 18px;max-width:68ch}
+  .nd .cot{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .nd h3{font-size:13px;font-weight:600;color:#9FB0A7;margin:0 0 8px}
+  .nd ul{margin:0;padding:0;list-style:none}
+  .nd li{font-size:14px;padding:5px 0;border-bottom:1px solid #2C3D37;line-height:1.45}
+  .nd li:last-child{border-bottom:0}
+  .nd li b{font-weight:600}
+  .nd li span{color:#9FB0A7;font-size:13px}
+  @media (max-width:720px){ .nd .cot{grid-template-columns:1fr;gap:16px} }
+
+  /* ---- bộ lọc ---- */
+  .loc{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  input[type=search]{
+    font:inherit;font-size:14px;padding:8px 12px;
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:0;width:200px;flex:0 0 auto;
+  }
+  @media (max-width:520px){ input[type=search]{width:100%} }
+  input[type=search]:focus-visible,.chip:focus-visible,tr:focus-visible{
+    outline:2px solid var(--tang);outline-offset:1px;
+  }
+  .chip{
+    font:inherit;font-size:13px;font-weight:500;
+    padding:7px 13px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);cursor:pointer;
+  }
+  .chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+
+  /* ---- bảng ---- */
+  table{width:100%;border-collapse:collapse;background:var(--panel)}
+  thead th{
+    text-align:left;font-size:12.5px;font-weight:600;color:var(--muted);
+    padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr{border-bottom:1px solid #E3E7E2;cursor:pointer}
+  tbody tr:last-child{border-bottom:0}
+  tbody tr:hover{background:#EAEEE9}
+  td{padding:11px 12px;vertical-align:middle}
+  td.hang{color:var(--muted);font-size:13px;width:38px;font-variant-numeric:tabular-nums}
+  td.kw{font-weight:500}
+  td.nhom{color:var(--muted);font-size:13px;white-space:nowrap}
+  td.spark{width:110px}
+  td.diem{font-weight:600;width:58px}
+  td.td{width:74px;font-weight:600}
+  .up{color:var(--tang)}
+  .down{color:var(--giam)}
+  .flat{color:var(--deu)}
+
+  tr.chitiet td{padding:0;background:#EEF1EC;cursor:default}
+  tr.chitiet:hover td{background:#EEF1EC}
+  .box{padding:16px 14px}
+  .box .tt{font-size:13px;color:var(--muted);margin:0 0 8px}
+
+  /* ---- gợi ý ---- */
+  .goiy{margin-top:40px}
+  .goiy h2{font-size:19px;font-weight:700;margin:0 0 4px;letter-spacing:-0.015em}
+  .goiy p.sub{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:62ch}
+  .gy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+  .gy{background:var(--panel);padding:14px 16px}
+  .gy h3{font-size:14px;font-weight:600;margin:0 0 8px;color:var(--ink)}
+  .gy ul{margin:0;padding:0;list-style:none}
+  .gy li{font-size:13.5px;color:var(--muted);padding:3px 0;border-bottom:1px dotted #DCE1DB}
+  .gy li:last-child{border-bottom:0}
+
+  .trangthai{background:var(--panel);padding:26px 20px;color:var(--muted);font-size:14.5px}
+  .trangthai b{color:var(--ink);display:block;margin-bottom:6px;font-weight:600}
+  code{background:#E3E7E2;padding:1px 5px;font-size:12.5px}
+
+  @media (max-width:720px){
+    .movers{grid-template-columns:1fr}
+    td.nhom,th.nhom,td.spark,th.spark{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Người Đà Nẵng tìm gì về sức khỏe &amp; con cái</h1>
+    <p class="meta" id="meta">Đang tải dữ liệu…</p>
+    <p class="meta" style="margin-top:6px">Số liệu là mức độ quan tâm tìm kiếm trên Google, không phải thông tin hay lời khuyên y tế.</p>
+  </header>
+
+  <section class="dai" id="dai" hidden>
+    <h2>Tăng mạnh nhất so với hai tháng trước</h2>
+    <div class="movers" id="movers"></div>
+  </section>
+
+  <section class="nd" id="nhandinh" hidden></section>
+
+  <div id="noidung" hidden>
+    <div class="loc">
+      <input type="search" id="timkiem" placeholder="Lọc từ khóa…" aria-label="Lọc từ khóa">
+      <div id="chips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="hang">#</th>
+          <th>Từ khóa</th>
+          <th class="nhom">Nhóm</th>
+          <th class="spark">12 tháng</th>
+          <th class="num">Điểm</th>
+          <th class="num">Thay đổi</th>
+        </tr>
+      </thead>
+      <tbody id="bang"></tbody>
+    </table>
+
+    <section class="goiy" id="goiy"></section>
+  </div>
+
+  <div class="trangthai" id="trangthai">
+    <b>Đang kết nối Firebase…</b>
+    Nếu mãi không lên, kiểm tra lại phần cấu hình Firebase trong file <code>index.html</code>.
+  </div>
+
+</div>
+
+<script>
+// Đọc thẳng qua REST, không cần thư viện Firebase — nhẹ và nhanh hơn nhiều
+const DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app";
+const NODE   = "suckhoe_danang";
+// ===================================================================
+
+let DATA = null, nhomDangChon = "Tất cả", dongMo = null;
+
+const $ = id => document.getElementById(id);
+
+function soDep(n){ return n.toLocaleString("vi-VN",{maximumFractionDigits:1}); }
+
+function lopThayDoi(v){ return v > 4 ? "up" : v < -4 ? "down" : "flat"; }
+function chuThayDoi(v){
+  const c = lopThayDoi(v);
+  const dau = v > 0 ? "+" : "";
+  return `<span class="${c}">${dau}${soDep(v)}%</span>`;
+}
+
+// vẽ đường nhỏ trong bảng
+function sparkline(series, mau, w = 100, h = 26){
+  const max = Math.max(...series, 1);
+  const b = 2;
+  const pts = series.map((v,i) => {
+    const x = b + i * (w - b*2) / (series.length - 1);
+    const y = h - b - (v / max) * (h - b*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    <polyline fill="none" stroke="${mau}" stroke-width="1.6"
+      stroke-linejoin="round" points="${pts.join(" ")}"/>
+  </svg>`;
+}
+
+// biểu đồ lớn khi bấm vào dòng
+function bieuDoLon(series, dates){
+  const w = 720, h = 190, l = 34, r = 10, t = 12, b = 26;
+  const max = Math.max(...series, 1);
+  const iw = w - l - r, ih = h - t - b;
+  const x = i => l + i * iw / (series.length - 1);
+  const y = v => t + ih - (v / max) * ih;
+
+  const line = series.map((v,i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${l},${t+ih} ${line} ${x(series.length-1).toFixed(1)},${t+ih}`;
+
+  let luoi = "";
+  [0, 0.5, 1].forEach(f => {
+    const v = max * f, yy = y(v);
+    luoi += `<line x1="${l}" y1="${yy}" x2="${w-r}" y2="${yy}" stroke="#D3D9D2" stroke-width="1"/>
+             <text x="${l-7}" y="${yy+4}" text-anchor="end" font-size="10.5" fill="#63716B">${Math.round(v)}</text>`;
+  });
+
+  let nhan = "";
+  const buoc = Math.max(1, Math.floor(series.length / 6));
+  for(let i = 0; i < series.length; i += buoc){
+    const d = dates[i] ? dates[i].slice(5).split("-").reverse().join("/") : "";
+    nhan += `<text x="${x(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="#63716B">${d}</text>`;
+  }
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Biểu đồ 12 tháng">
+    ${luoi}
+    <polygon points="${area}" fill="#D94F0C" opacity="0.10"/>
+    <polyline points="${line}" fill="none" stroke="#D94F0C" stroke-width="2" stroke-linejoin="round"/>
+    ${nhan}
+  </svg>`;
+}
+
+function veMovers(){
+  const top = [...DATA.tuKhoa]
+    .filter(k => k.diem >= 3)                 // bỏ từ khóa quá ít lượt tìm
+    .sort((a,b) => b.thayDoi - a.thayDoi)
+    .slice(0,3);
+  if(!top.length){ $("dai").hidden = true; return; }
+  $("movers").innerHTML = top.map(k => `
+    <div class="mover">
+      <div class="kw">${k.kw}</div>
+      <div class="pct">+${soDep(k.thayDoi)}%</div>
+      ${sparkline(k.series, "#D94F0C", 160, 34)}
+    </div>`).join("");
+  $("dai").hidden = false;
+}
+
+function veNhanDinh(){
+  const n = DATA.nhanDinh;
+  if(!n || !n.nhan_dinh){ $("nhandinh").hidden = true; return; }
+  const nenLam = (n.nen_lam || []).filter(Boolean);
+  const baiViet = (n.y_tuong_bai_viet || []).filter(Boolean);
+  $("nhandinh").innerHTML = `
+    <h2>Nhận định tuần này</h2>
+    <p class="loi">${n.nhan_dinh}</p>
+    <div class="cot">
+      ${nenLam.length ? `<div><h3>Cơ hội</h3><ul>${
+        nenLam.map(v => `<li><b>${v.viec || ""}</b>${v.vi_sao ? `<br><span>${v.vi_sao}</span>` : ""}</li>`).join("")
+      }</ul></div>` : ""}
+      ${baiViet.length ? `<div><h3>Ý tưởng nội dung</h3><ul>${
+        baiViet.map(t => `<li>${t}</li>`).join("")
+      }</ul></div>` : ""}
+    </div>`;
+  $("nhandinh").hidden = false;
+}
+
+function veChips(){
+  const nhom = ["Tất cả", ...new Set(DATA.tuKhoa.map(k => k.nhom))];
+  $("chips").innerHTML = nhom.map(n =>
+    `<button class="chip" data-nhom="${n}" aria-pressed="${n === nhomDangChon}">${n}</button>`
+  ).join("");
+  $("chips").querySelectorAll(".chip").forEach(b => {
+    b.onclick = () => { nhomDangChon = b.dataset.nhom; dongMo = null; veChips(); veBang(); };
+  });
+}
+
+function veBang(){
+  const tim = $("timkiem").value.trim().toLowerCase();
+  const ds = DATA.tuKhoa.filter(k =>
+    (nhomDangChon === "Tất cả" || k.nhom === nhomDangChon) &&
+    (!tim || k.kw.toLowerCase().includes(tim))
+  );
+
+  if(!ds.length){
+    $("bang").innerHTML = `<tr><td colspan="6" style="padding:22px;color:var(--muted)">
+      Không có từ khóa nào khớp. Thử bớt chữ trong ô lọc.</td></tr>`;
+    return;
+  }
+
+  $("bang").innerHTML = ds.map(k => {
+    const mo = dongMo === k.kw;
+    const row = `
+      <tr tabindex="0" data-kw="${k.kw}">
+        <td class="hang">${k.hang}</td>
+        <td class="kw">${k.kw}</td>
+        <td class="nhom">${k.nhom}</td>
+        <td class="spark">${sparkline(k.series, "#63716B")}</td>
+        <td class="num diem">${soDep(k.diem)}</td>
+        <td class="num td">${chuThayDoi(k.thayDoi)}</td>
+      </tr>`;
+    const chitiet = mo ? `
+      <tr class="chitiet"><td colspan="6"><div class="box">
+        <p class="tt">Mức độ quan tâm ở Đà Nẵng trong ${DATA.khoangThoiGian} · đỉnh cao nhất ${soDep(k.dinh)} điểm</p>
+        ${bieuDoLon(k.series, DATA.ngay)}
+      </div></td></tr>` : "";
+    return row + chitiet;
+  }).join("");
+
+  $("bang").querySelectorAll("tr[data-kw]").forEach(tr => {
+    const chon = () => {
+      dongMo = dongMo === tr.dataset.kw ? null : tr.dataset.kw;
+      veBang();
+    };
+    tr.onclick = chon;
+    tr.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); chon(); } };
+  });
+}
+
+function veGoiY(){
+  const gy = (DATA.goiY || []).filter(g => g.danhSach && g.danhSach.length);
+  if(!gy.length){ $("goiy").hidden = true; return; }
+  $("goiy").innerHTML = `
+    <h2>Google gợi ý gì khi gõ</h2>
+    <p class="sub">Đây là các cụm Google tự xổ xuống — tức là cách người ta thật sự gõ khi tìm. Dùng làm tiêu đề bài viết hoặc tên dịch vụ là hợp nhất.</p>
+    <div class="gy-grid">
+      ${gy.map(g => `<div class="gy"><h3>${g.tu}</h3><ul>${
+        g.danhSach.map(x => `<li>${x}</li>`).join("")
+      }</ul></div>`).join("")}
+    </div>`;
+}
+
+function ve(){
+  $("meta").innerHTML =
+    `Khu vực <b>${DATA.khuVuc}</b> · ${DATA.khoangThoiGian} · cập nhật <b>${DATA.capNhatHienThi}</b>`;
+  veMovers();
+  veNhanDinh();
+  veChips();
+  veBang();
+  veGoiY();
+  $("trangthai").hidden = true;
+  $("noidung").hidden = false;
+  $("timkiem").oninput = () => { dongMo = null; veBang(); };
+}
+
+(async function(){
+  try{
+    const res = await fetch(`${DB_URL}/${NODE}/snapshot.json`);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    if(!data){
+      $("trangthai").innerHTML = `<b>Chưa có dữ liệu</b>
+        Kết nối được nhưng node <code>${NODE}/snapshot</code> còn trống.
+        Chạy workflow trên GitHub Actions một lần để lấy dữ liệu đầu tiên.`;
+      return;
+    }
+    DATA = data;
+    DATA.tuKhoa = (DATA.tuKhoa || []).filter(Boolean);
+    DATA.ngay   = DATA.ngay || [];
+    DATA.goiY   = (DATA.goiY || []).filter(Boolean);
+    ve();
+  }catch(e){
+    $("trangthai").innerHTML = `<b>Không đọc được dữ liệu</b>
+      ${e.message}<br><br>Kiểm tra rules của Realtime Database:
+      node <code>${NODE}</code> cần có <code>".read": true</code>.`;
+  }
+})();
+</script>
+</body>
+</html>
