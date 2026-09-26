@@ -1,0 +1,47 @@
+name: Xu hướng sức khỏe & con cái Đà Nẵng
+
+on:
+  schedule:
+    # 3h sáng UTC thứ Hai = 10h sáng thứ Hai giờ Việt Nam
+    # Chạy sau phần ô tô 1 tiếng để không gọi Google Trends cùng lúc
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: suckhoe-trends
+  cancel-in-progress: false
+
+jobs:
+  suckhoe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Lấy code
+        uses: actions/checkout@v4
+
+      - name: Cài Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Cài thư viện
+        run: |
+          if [ -f backend/requirements.txt ]; then
+            pip install -r backend/requirements.txt
+          else
+            pip install pytrends pandas requests firebase-admin
+          fi
+
+      - name: Lấy xu hướng sức khỏe & con cái
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY:  ${{ secrets.MISTRAL_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
+          GH_MODELS_TOKEN:   ${{ secrets.GH_MODELS_TOKEN }}
+          CEREBRAS_API_KEY:  ${{ secrets.CEREBRAS_API_KEY }}
+        run: python backend/xuhuong.py backend/suckhoe_keywords.json
