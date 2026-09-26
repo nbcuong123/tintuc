@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Xu hướng Đà Nẵng — Người Đà Nẵng đang tìm gì</title>
+<meta name="description" content="Theo dõi hàng tuần người Đà Nẵng tìm kiếm gì trên Google: ô tô, sức khỏe, con cái và nhiều chủ đề khác.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --concrete:#D7DCD8; --panel:#F3F5F2; --ink:#16241F; --muted:#63716B;
+    --line:#B4BDB6; --tang:#D94F0C;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --concrete:#101714; --panel:#18221E; --ink:#E4EAE6; --muted:#8A9A93;
+      --line:#2B3833; --tang:#F0692A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --concrete:#101714; --panel:#18221E; --ink:#E4EAE6; --muted:#8A9A93;
+    --line:#2B3833; --tang:#F0692A;
+  }
+  *{box-sizing:border-box}
+  html{scroll-padding-top:env(safe-area-inset-top,0px)}
+  body{
+    margin:0;background:var(--concrete);color:var(--ink);
+    font-family:'Be Vietnam Pro',system-ui,-apple-system,sans-serif;
+    font-size:15px;line-height:1.5;
+  }
+  .wrap{max-width:1020px;margin:0 auto;padding:36px 18px 72px}
+
+  header{margin-bottom:34px}
+  h1{
+    font-size:clamp(32px,6.5vw,54px);font-weight:800;letter-spacing:-.03em;
+    line-height:1.04;margin:0 0 14px;max-width:13ch;
+  }
+  .gt{color:var(--muted);font-size:16px;max-width:56ch;margin:0}
+
+  .luoi{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+
+  .the{
+    display:flex;flex-direction:column;gap:12px;
+    background:var(--panel);color:inherit;text-decoration:none;
+    padding:22px 22px 20px;border-left:4px solid var(--ink);
+    transition:border-color .15s, transform .15s;min-height:220px;
+  }
+  .the:hover{border-left-color:var(--tang);transform:translateY(-2px)}
+  .the:focus-visible{outline:2px solid var(--tang);outline-offset:3px}
+  .the-dau{display:flex;align-items:center;gap:12px}
+  .the-bieu{font-size:30px;line-height:1}
+  .the-ten{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.15}
+  .the-mo{color:var(--muted);font-size:14px;margin:0}
+  .the-nd{
+    font-size:14.5px;line-height:1.55;margin:0;padding-top:12px;border-top:1px solid var(--line);
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .the-nd.cho{color:var(--muted);font-style:italic}
+  .the-chan{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:10px;
+    font-size:12.5px;color:var(--muted);font-weight:500}
+  .the-di{color:var(--tang);font-weight:700;font-size:14px}
+
+  .the.phu{border-left-color:var(--line);min-height:0}
+  .the.phu .the-ten{font-size:17px}
+
+  h2.muc{font-size:13px;font-weight:600;color:var(--muted);margin:38px 0 12px;letter-spacing:.01em}
+
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Người Đà Nẵng đang tìm gì</h1>
+    <p class="gt">Mỗi tuần tổng hợp xu hướng tìm kiếm Google tại Đà Nẵng theo từng chủ đề, kèm nhận định ngắn về điều đang thay đổi.</p>
+  </header>
+
+  <div class="luoi" id="luoi"></div>
+
+  <h2 class="muc">Xem thêm</h2>
+  <div class="luoi" id="luoiPhu"></div>
+
+  <footer>
+    Số liệu là mức độ quan tâm tìm kiếm tương đối trên Google, không phải số lượt tìm thật,
+    và không phải lời khuyên chuyên môn. Cập nhật tự động mỗi thứ Hai.
+  </footer>
+
+</div>
+
+<script>
+// ============================================================
+//  DANH SÁCH CHỦ ĐỀ — thêm chủ đề mới chỉ cần thêm một dòng
+// ============================================================
+const DB_URL = "https://tonghoptinngay-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+const CHU_DE = [
+  { ten:"Ô tô",               bieu:"🚗", trang:"oto.html",     node:"oto_danang",
+    mo:"Sửa chữa, mâm lốp, đồng sơn, mua bán xe và dịch vụ quanh chiếc xe." },
+  { ten:"Sức khỏe & con cái", bieu:"🩺", trang:"suckhoe.html", node:"suckhoe_danang",
+    mo:"Bệnh thường gặp, khám chữa bệnh, mang thai, trẻ nhỏ và học hành." },
+];
+
+const TRANG_PHU = [
+  { ten:"Tin tức hôm nay", bieu:"📰", trang:"index.html",
+    mo:"Tổng hợp tin tức trong nước và quốc tế, AI tóm tắt mỗi ngày." },
+];
+// ============================================================
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function theHTML(c, phu){
+  return `
+    <a class="the${phu ? " phu" : ""}" href="${esc(c.trang)}">
+      <div class="the-dau">
+        <span class="the-bieu" aria-hidden="true">${c.bieu}</span>
+        <h2 class="the-ten">${esc(c.ten)}</h2>
+      </div>
+      <p class="the-mo">${esc(c.mo)}</p>
+      ${phu ? "" : `<p class="the-nd cho" id="nd-${esc(c.node)}">Đang tải nhận định…</p>`}
+      <div class="the-chan">
+        <span id="cn-${esc(c.node || "")}">${phu ? "" : "&nbsp;"}</span>
+        <span class="the-di">Xem →</span>
+      </div>
+    </a>`;
+}
+
+$("luoi").innerHTML    = CHU_DE.map(c => theHTML(c, false)).join("");
+$("luoiPhu").innerHTML = TRANG_PHU.map(c => theHTML(c, true)).join("");
+
+// Chỉ lấy 2 mẩu dữ liệu nhỏ cho mỗi chủ đề, không tải cả bảng số liệu
+async function layNho(duong){
+  const r = await fetch(`${DB_URL}/${duong}.json`);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+CHU_DE.forEach(async c => {
+  const ndEl = $("nd-" + c.node), cnEl = $("cn-" + c.node);
+  try {
+    const [nd, cn] = await Promise.all([
+      layNho(`${c.node}/snapshot/nhanDinh/nhan_dinh`),
+      layNho(`${c.node}/snapshot/capNhatHienThi`)
+    ]);
+    if (nd){
+      ndEl.textContent = nd;
+      ndEl.classList.remove("cho");
+    } else {
+      ndEl.textContent = cn ? "Tuần này chưa có nhận định." : "Chưa có dữ liệu — đang chờ lần cập nhật đầu tiên.";
+    }
+    cnEl.textContent = cn ? "Cập nhật " + cn.split(" ")[0] : "";
+  } catch(e){
+    ndEl.textContent = "Chưa tải được nhận định.";
+  }
+});
+</script>
+</body>
+</html>
