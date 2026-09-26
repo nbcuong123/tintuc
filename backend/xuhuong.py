@@ -162,6 +162,7 @@ def build_prompt(items, goi_y, cfg):
                    for g in goi_y if g.get("danhSach")) or "(không có)"
 
     boi_canh = cfg.get("boi_canh_ai", "Phân tích xu hướng tìm kiếm.")
+    luu_y = "".join(f"- {x}\n" for x in cfg.get("luu_y_ai", []))
     khu_vuc = cfg.get("khu_vuc", "Đà Nẵng")
 
     return f"""{boi_canh}
@@ -194,8 +195,7 @@ Yêu cầu:
 - "nen_lam": 3-4 mục.
 - "y_tuong_bai_viet": 4-5 tiêu đề, bám sát cụm từ Google gợi ý ở trên.
 - Không bịa số liệu ngoài dữ liệu đã cho.
-- Không đưa lời khuyên chẩn đoán hay điều trị y tế; đây là phân tích xu hướng tìm kiếm.
-"""
+{luu_y}"""
 
 
 def ai_nhan_dinh(items, goi_y, cfg, providers, parse_fn):
